@@ -1,20 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   GitMerge, CheckCircle2, ArrowRight, Calendar, FileText, Send, Mail,
   CreditCard, DollarSign, Handshake, ChevronRight, UserPlus, Clock, Sparkles,
-  Phone, MessageSquare, Play, RotateCcw, AlertCircle, ShieldCheck, Award
+  Phone, MessageSquare, Play, RotateCcw, AlertCircle, ShieldCheck, Award,
+  Eye, Filter, XCircle, RefreshCw, Layers, Check, Info, ArrowUpRight
 } from "lucide-react";
 import { PageHeader, SectionCard, StatusBadge, KpiCard } from "@/components/crm/primitives";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
+import { CUSTOMERS, ACTIVE_SERVICES, type Customer, type ServiceRow } from "@/data/crm";
 
 export const Route = createFileRoute("/_app/telesales")({
   head: () => ({
@@ -26,7 +32,7 @@ export const Route = createFileRoute("/_app/telesales")({
   component: TelesalesJourneyPage,
 });
 
-interface LeadWorkflowState {
+export interface LeadWorkflowState {
   id: string;
   leadName: string;
   company: string;
@@ -35,8 +41,21 @@ interface LeadWorkflowState {
   service: string;
   stage: number; // 1 to 6
   meetingAttended?: boolean;
+  meetingCancelled?: boolean;
+  cancellationReason?: string;
+  rescheduledDate?: string;
+  thankYouNoteSent?: boolean;
+  thankYouContent?: string;
   proposalSent?: boolean;
   dealClosed?: boolean;
+  dealLost?: boolean;
+  lossReason?: string;
+  calendarInviteSent?: boolean;
+  meetingDate?: string;
+  meetingTime?: string;
+  meetingLocation?: string;
+  attendees?: string;
+  createdDate?: string; // YYYY-MM-DD
   executionStep?: number; // 1 to 7
 }
 
@@ -50,8 +69,12 @@ const INITIAL_DEMO_LEADS: LeadWorkflowState[] = [
     service: "Corporate Tax Filing & Audit",
     stage: 4, // Proposal stage
     meetingAttended: true,
+    thankYouNoteSent: true,
     proposalSent: true,
     dealClosed: false,
+    createdDate: "2026-08-15",
+    meetingDate: "2026-08-16",
+    meetingTime: "11:00 AM",
   },
   {
     id: "tw-102",
@@ -63,6 +86,10 @@ const INITIAL_DEMO_LEADS: LeadWorkflowState[] = [
     stage: 2, // Appointment Fixed
     meetingAttended: false,
     proposalSent: false,
+    calendarInviteSent: true,
+    meetingDate: "2026-08-18",
+    meetingTime: "02:30 PM",
+    createdDate: "2026-08-16",
   },
   {
     id: "tw-103",
@@ -71,11 +98,36 @@ const INITIAL_DEMO_LEADS: LeadWorkflowState[] = [
     phone: "+971 55 444 3322",
     email: "a.petrov@nordictech.io",
     service: "Transfer Pricing Documentation",
-    stage: 5, // Negotiation / Deal Closed
+    stage: 5, // Negotiation / Closing
     meetingAttended: true,
+    thankYouNoteSent: true,
     proposalSent: true,
     dealClosed: true,
     executionStep: 4, // Send Invoice Request
+    createdDate: "2026-08-10",
+  },
+  {
+    id: "tw-104",
+    leadName: "Rashid Al Falasi",
+    company: "Gulf Horizon Real Estate",
+    phone: "+971 50 888 9911",
+    email: "r.falasi@gulfhorizon.ae",
+    service: "VAT Return Filing (Quarterly)",
+    stage: 1, // Lead Call & Qualification
+    createdDate: "2026-08-17",
+  },
+  {
+    id: "tw-105",
+    leadName: "Sarah Jenkins",
+    company: "Horizon Retail Group LLC",
+    phone: "+971 56 222 1100",
+    email: "s.jenkins@horizonretail.ae",
+    service: "Accounting & Bookkeeping",
+    stage: 3, // Meeting Execution
+    calendarInviteSent: true,
+    meetingDate: "2026-08-17",
+    meetingTime: "10:00 AM",
+    createdDate: "2026-08-14",
   },
 ];
 
@@ -83,42 +135,42 @@ const WORKFLOW_STAGES = [
   {
     id: 1,
     title: "1. Lead & Contact",
-    subtitle: "Lead Call & Interest Check",
+    subtitle: "Lead Call & Qualification",
     icon: UserPlus,
     color: "border-blue-500/30 bg-blue-500/5 text-blue-600 dark:text-blue-400",
   },
   {
     id: 2,
     title: "2. Appointment",
-    subtitle: "Book Meeting & Calendar Invite",
+    subtitle: "Book & Send Calendar Invite",
     icon: Calendar,
     color: "border-purple-500/30 bg-purple-500/5 text-purple-600 dark:text-purple-400",
   },
   {
     id: 3,
-    title: "3. Meeting",
-    subtitle: "Attended Check & Thank You",
+    title: "3. Meeting Execution",
+    subtitle: "Attended / Cancelled & Thank You Note",
     icon: CheckCircle2,
     color: "border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400",
   },
   {
     id: 4,
     title: "4. Proposal & Quote",
-    subtitle: "Service Quotation Sent",
+    subtitle: "Custom Quotation Sent",
     icon: FileText,
     color: "border-indigo-500/30 bg-indigo-500/5 text-indigo-600 dark:text-indigo-400",
   },
   {
     id: 5,
-    title: "5. Closing",
-    subtitle: "Follow Up & Deal Closed 🎉",
+    title: "5. Closing Outcome",
+    subtitle: "Deal Closed (Won) vs Deal Lost",
     icon: Handshake,
     color: "border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400",
   },
   {
     id: 6,
-    title: "6. Post-Close Execution",
-    subtitle: "Handover to Operations",
+    title: "6. Post-Close Handover",
+    subtitle: "Operations & Ops Takeover",
     icon: ShieldCheck,
     color: "border-teal-500/30 bg-teal-500/5 text-teal-600 dark:text-teal-400",
   },
@@ -137,46 +189,279 @@ const POST_CLOSE_STEPS = [
 function TelesalesJourneyPage() {
   const [leads, setLeads] = useState<LeadWorkflowState[]>(INITIAL_DEMO_LEADS);
   const [selectedLead, setSelectedLead] = useState<LeadWorkflowState | null>(null);
-  const [activeModal, setActiveModal] = useState<string | null>(null);
 
-  function advanceLeadStage(leadId: string, targetStage: number) {
-    setLeads(
-      leads.map((l) => (l.id === leadId ? { ...l, stage: targetStage } : l))
+  // Filters State
+  const [dateRange, setDateRange] = useState<string>("All"); // All, Today, This Week, This Month
+  const [visibleStages, setVisibleStages] = useState<number[]>([1, 2, 3, 4, 5, 6]);
+  const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+
+  // Modals State
+  const [calendarModalLead, setCalendarModalLead] = useState<LeadWorkflowState | null>(null);
+  const [thankYouModalLead, setThankYouModalLead] = useState<LeadWorkflowState | null>(null);
+  const [cancellationModalLead, setCancellationModalLead] = useState<LeadWorkflowState | null>(null);
+  const [dealLostModalLead, setDealLostModalLead] = useState<LeadWorkflowState | null>(null);
+  const [customPreviewLead, setCustomPreviewLead] = useState<LeadWorkflowState | null>(null);
+  const [lifecycleExplainerOpen, setLifecycleExplainerOpen] = useState<boolean>(false);
+
+  // Calendar Modal Form State
+  const [calDate, setCalDate] = useState("2026-08-20");
+  const [calTime, setCalTime] = useState("11:00 AM");
+  const [calType, setCalType] = useState("MS Teams Virtual Call");
+  const [calAttendees, setCalAttendees] = useState("Priya Menon (Sales), K. Ali (Tax Partner)");
+
+  // Thank You Note Form State
+  const [tyNoteContent, setTyNoteContent] = useState("");
+
+  // Cancellation & Loss Reasons
+  const [cancelReason, setCancelReason] = useState("Client No-Show / Unavailable");
+  const [lossReason, setLossReason] = useState("Price High / Budget Constraints");
+
+  // Custom Preview State
+  const [previewChannel, setPreviewChannel] = useState<"Email" | "WhatsApp" | "Proposal">("Email");
+  const [customSubject, setCustomSubject] = useState("");
+  const [customBody, setCustomBody] = useState("");
+
+  // Filtering leads by Date Range
+  const filteredLeads = useMemo(() => {
+    return leads.filter((l) => {
+      if (dateRange === "Today") return l.createdDate === "2026-08-17";
+      if (dateRange === "This Week") return (l.createdDate ?? "").startsWith("2026-08");
+      if (dateRange === "This Month") return (l.createdDate ?? "").startsWith("2026-08");
+      return true;
+    });
+  }, [leads, dateRange]);
+
+  function advanceLeadStage(leadId: string, targetStage: number, updates?: Partial<LeadWorkflowState>) {
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, stage: targetStage, ...updates } : l))
     );
     if (selectedLead && selectedLead.id === leadId) {
-      setSelectedLead({ ...selectedLead, stage: targetStage });
+      setSelectedLead((prev) => (prev ? { ...prev, stage: targetStage, ...updates } : null));
     }
   }
 
   function advanceExecutionStep(leadId: string, currentStep: number) {
     const nextStep = currentStep + 1;
-    setLeads(
-      leads.map((l) => (l.id === leadId ? { ...l, executionStep: nextStep } : l))
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, executionStep: nextStep } : l))
     );
     if (selectedLead && selectedLead.id === leadId) {
-      setSelectedLead({ ...selectedLead, executionStep: nextStep });
+      setSelectedLead((prev) => (prev ? { ...prev, executionStep: nextStep } : null));
     }
     toast.success(`Executed Step ${nextStep}: ${POST_CLOSE_STEPS[nextStep - 1]?.title}`);
   }
 
+  function handleMarkDealClosed(lead: LeadWorkflowState) {
+    // 1. Advance lead to Stage 6 & Mark Deal Closed
+    advanceLeadStage(lead.id, 6, {
+      dealClosed: true,
+      dealLost: false,
+      executionStep: 1,
+    });
+
+    // 2. Auto-promote to Customers list mock
+    const newCustomer: Customer = {
+      id: `AY-${Math.floor(1000 + Math.random() * 9000)}`,
+      name: lead.leadName,
+      company: lead.company,
+      email: lead.email,
+      mobile: lead.phone,
+      city: "Dubai",
+      country: "UAE",
+      status: "Active",
+      service: lead.service,
+      expiry: "2027-08-31",
+      caller: "Priya Menon",
+      nationality: "UAE",
+      trn: "100299887700003",
+      engagementType: "Corporate Tax",
+      jobTitle: "Managing Director",
+      leadSource: "Telesales Journey",
+      createdDate: new Date().toISOString().split("T")[0],
+      avatar: `https://i.pravatar.cc/120?u=${lead.id}`,
+    };
+    CUSTOMERS.unshift(newCustomer);
+
+    // 3. Auto-create Active Service Engagement in Services tab mock
+    const newEngagement: ServiceRow = {
+      id: `SVC-${Math.floor(1000 + Math.random() * 9000)}`,
+      service: `${lead.service} — FY 2026`,
+      start: new Date().toISOString().split("T")[0],
+      end: "2027-08-31",
+      amount: 45000,
+      status: "Active",
+    };
+    ACTIVE_SERVICES.unshift(newEngagement);
+
+    toast.success(`🎉 DEAL CLOSED FOR ${lead.company}!`, {
+      description: "Auto-promoted to Customer & Active Service Engagement created in Services tab.",
+      duration: 6000,
+    });
+  }
+
+  function handleSendCalendarInvite() {
+    if (!calendarModalLead) return;
+    advanceLeadStage(calendarModalLead.id, 3, {
+      calendarInviteSent: true,
+      meetingDate: calDate,
+      meetingTime: calTime,
+      meetingLocation: calType,
+      attendees: calAttendees,
+    });
+    setCalendarModalLead(null);
+    toast.success(`Calendar Invite Sent to ${calendarModalLead.email}!`, {
+      description: `Meeting scheduled for ${calDate} at ${calTime} via ${calType}.`,
+    });
+  }
+
+  function handleSendThankYouNote() {
+    if (!thankYouModalLead) return;
+    advanceLeadStage(thankYouModalLead.id, 4, {
+      meetingAttended: true,
+      thankYouNoteSent: true,
+      thankYouContent: tyNoteContent,
+    });
+    setThankYouModalLead(null);
+    toast.success(`Thank You Note Sent to ${thankYouModalLead.leadName}!`, {
+      description: "Meeting marked Attended → Advanced to Proposal & Quotation stage.",
+    });
+  }
+
+  function handleConfirmCancellation() {
+    if (!cancellationModalLead) return;
+    advanceLeadStage(cancellationModalLead.id, 3, {
+      meetingCancelled: true,
+      meetingAttended: false,
+      cancellationReason: cancelReason,
+    });
+    setCancellationModalLead(null);
+    toast.error(`Meeting marked Cancelled for ${cancellationModalLead.company}`, {
+      description: `Reason logged: ${cancelReason}`,
+    });
+  }
+
+  function handleConfirmDealLost() {
+    if (!dealLostModalLead) return;
+    advanceLeadStage(dealLostModalLead.id, 5, {
+      dealLost: true,
+      dealClosed: false,
+      lossReason: lossReason,
+    });
+    setDealLostModalLead(null);
+    toast.error(`Deal marked Lost for ${dealLostModalLead.company}`, {
+      description: `Reason logged: ${lossReason}`,
+    });
+  }
+
+  function openCustomPreview(lead: LeadWorkflowState, channel: "Email" | "WhatsApp" | "Proposal") {
+    setPreviewChannel(channel);
+    setCustomPreviewLead(lead);
+    if (channel === "Email") {
+      setCustomSubject(`AY Astute Group — ${lead.service} Discussion for ${lead.company}`);
+      setCustomBody(`Dear ${lead.leadName},\n\nThank you for speaking with our telesales team regarding ${lead.service} for ${lead.company}.\n\nAY Astute Group is an MOE-approved auditor and FTA-approved tax agency in the UAE.\n\nWe look forward to connecting with you on your scheduled meeting.\n\nBest regards,\nAY Astute Group Telesales Team`);
+    } else if (channel === "WhatsApp") {
+      setCustomSubject("WhatsApp HSM Template Preview");
+      setCustomBody(`Hello ${lead.leadName} 👋\nThis is Priya from AY Astute Group. Following up on our call regarding ${lead.service} for ${lead.company}.\n\nPlease view our company overview brochure here: https://ay-uae.com/brochure.pdf\n\nReply YES to confirm your appointment slot.`);
+    } else {
+      setCustomSubject(`Commercial Proposal — ${lead.service}`);
+      setCustomBody(`CONFIDENTIAL SERVICE QUOTATION\nClient: ${lead.company}\nAttention: ${lead.leadName}\nService Scope: ${lead.service}\n\nAnnual Fee Investment: AED 35,000 + VAT\nDeliverables: MOE Approved Audit Report, FTA Tax Filing, Management Letter.\n\nValidity: 14 Days`);
+    }
+  }
+
+  const activeStageList = isFocusMode ? [1] : visibleStages;
+
   return (
-    <div className="mx-auto max-w-[1500px]">
+    <div className="mx-auto max-w-[1550px]">
       <PageHeader
         title="AY Telesales Journey — Sales Workflow Engine"
         subtitle="Standardized client conversion pipeline from initial lead call to deal close and operations handover."
         actions={
-          <Button variant="outline" className="rounded-xl" onClick={() => setLeads(INITIAL_DEMO_LEADS)}>
-            <RotateCcw className="mr-1.5 h-4 w-4" /> Reset Presentation Demo
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="rounded-xl border-primary/30 text-primary hover:bg-primary/5" onClick={() => setLifecycleExplainerOpen(true)}>
+              <Info className="mr-1.5 h-4 w-4" /> Customers vs Leads Explainer
+            </Button>
+            <Button variant="outline" className="rounded-xl" onClick={() => setLeads(INITIAL_DEMO_LEADS)}>
+              <RotateCcw className="mr-1.5 h-4 w-4" /> Reset Presentation Demo
+            </Button>
+          </div>
         }
       />
 
+      {/* Control & Filter Toolbar */}
+      <div className="mb-6 rounded-2xl border bg-card p-4 shadow-sm flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        {/* Date Range Filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" /> Date Filter:
+          </span>
+          {["All", "Today", "This Week", "This Month"].map((range) => (
+            <Button
+              key={range}
+              size="sm"
+              variant={dateRange === range ? "default" : "outline"}
+              className="h-8 rounded-xl text-xs"
+              onClick={() => setDateRange(range)}
+            >
+              {range}
+            </Button>
+          ))}
+        </div>
+
+        {/* Visibility & Focus Mode Configurator */}
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={isFocusMode ? "default" : "outline"}
+            className={`h-8 rounded-xl text-xs font-medium transition ${
+              isFocusMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
+            }`}
+            onClick={() => setIsFocusMode(!isFocusMode)}
+          >
+            <Eye className="mr-1.5 h-3.5 w-3.5" />
+            {isFocusMode ? "Exit Focus Mode (Show All)" : "Lead Focus Mode (Hide Other Columns)"}
+          </Button>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs">
+                <Filter className="mr-1.5 h-3.5 w-3.5" /> Column Visibility ({visibleStages.length}/6)
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-3 space-y-2">
+              <p className="text-xs font-bold border-b pb-1.5">Toggle Visible Workflow Stages</p>
+              {WORKFLOW_STAGES.map((stg) => (
+                <div key={stg.id} className="flex items-center gap-2 text-xs">
+                  <Checkbox
+                    id={`stg-chk-${stg.id}`}
+                    checked={visibleStages.includes(stg.id)}
+                    onCheckedChange={(chk) => {
+                      if (chk) {
+                        setVisibleStages([...visibleStages, stg.id].sort());
+                      } else {
+                        if (visibleStages.length > 1) {
+                          setVisibleStages(visibleStages.filter((s) => s !== stg.id));
+                        } else {
+                          toast.error("At least one stage column must remain visible.");
+                        }
+                      }
+                    }}
+                  />
+                  <Label htmlFor={`stg-chk-${stg.id}`} className="cursor-pointer text-xs">
+                    {stg.title}
+                  </Label>
+                </div>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiCard label="Pipeline Leads" value={leads.length} tone="primary" icon={UserPlus} delta="In sales workflow" />
-        <KpiCard label="Appointments Fixed" value={leads.filter((l) => l.stage >= 2).length} tone="info" icon={Calendar} delta="Meeting scheduled" />
-        <KpiCard label="Proposals Out" value={leads.filter((l) => l.stage >= 4).length} tone="warning" icon={FileText} delta="AED 125,000 value" />
-        <KpiCard label="Deals Closed & Executing" value={leads.filter((l) => l.dealClosed).length} tone="success" icon={Handshake} delta="Passed to execution" />
+        <KpiCard label="Pipeline Leads" value={filteredLeads.length} tone="primary" icon={UserPlus} delta="In active pipeline" />
+        <KpiCard label="Appointments Fixed" value={filteredLeads.filter((l) => l.stage >= 2).length} tone="info" icon={Calendar} delta="Meeting scheduled" />
+        <KpiCard label="Proposals Out" value={filteredLeads.filter((l) => l.stage >= 4).length} tone="warning" icon={FileText} delta="AED 165,000 value" />
+        <KpiCard label="Deals Closed & Executing" value={filteredLeads.filter((l) => l.dealClosed).length} tone="success" icon={Handshake} delta="Auto-synced to Services" />
       </div>
 
       {/* Visual Interactive Flowchart Strip */}
@@ -187,17 +472,22 @@ function TelesalesJourneyPage() {
               <GitMerge className="h-5 w-5 text-primary" /> Interactive Sales Workflow Pipeline
             </h2>
             <p className="text-xs text-muted-foreground">
-              Sequential decision nodes governing telesales outreach, meetings, and proposal delivery.
+              Sequential decision nodes governing telesales outreach, meeting execution, thank-you notes, and closing.
             </p>
           </div>
-          <Badge variant="outline" className="rounded-full">
-            Automated Process Tracking
+          <Badge variant="outline" className="rounded-full bg-primary/5 text-primary border-primary/20">
+            Real-Time Automated Sync Active
           </Badge>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {WORKFLOW_STAGES.map((stg) => (
-            <div key={stg.id} className={`rounded-xl border p-3 transition-all ${stg.color}`}>
+            <div
+              key={stg.id}
+              className={`rounded-xl border p-3 transition-all ${stg.color} ${
+                activeStageList.includes(stg.id) ? "opacity-100 ring-1 ring-primary/20" : "opacity-40 grayscale"
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <stg.icon className="h-4 w-4 shrink-0" />
                 <span className="font-display text-xs font-bold truncate">{stg.title}</span>
@@ -208,10 +498,26 @@ function TelesalesJourneyPage() {
         </div>
       </div>
 
-      {/* Interactive Kanban Workflow Columns */}
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        {WORKFLOW_STAGES.map((stg) => {
-          const stageLeads = leads.filter((l) => l.stage === stg.id);
+      {/* Dynamic Kanban Workflow Columns */}
+      <div
+        className={`mt-6 grid grid-cols-1 gap-4 ${
+          isFocusMode
+            ? "grid-cols-1"
+            : visibleStages.length === 1
+            ? "grid-cols-1"
+            : visibleStages.length === 2
+            ? "md:grid-cols-2"
+            : visibleStages.length === 3
+            ? "md:grid-cols-3"
+            : visibleStages.length === 4
+            ? "md:grid-cols-2 lg:grid-cols-4"
+            : visibleStages.length === 5
+            ? "md:grid-cols-3 lg:grid-cols-5"
+            : "md:grid-cols-3 lg:grid-cols-6"
+        }`}
+      >
+        {WORKFLOW_STAGES.filter((stg) => activeStageList.includes(stg.id)).map((stg) => {
+          const stageLeads = filteredLeads.filter((l) => l.stage === stg.id);
           return (
             <div key={stg.id} className="flex flex-col rounded-2xl border bg-card p-3 shadow-sm min-h-[480px]">
               <div className="mb-3 flex items-center justify-between border-b pb-2">
@@ -226,17 +532,45 @@ function TelesalesJourneyPage() {
                   <motion.div
                     key={lead.id}
                     whileHover={{ scale: 1.02 }}
-                    className="cursor-pointer rounded-xl border bg-background p-3 shadow-xs transition hover:border-primary"
+                    className={`cursor-pointer rounded-xl border p-3 shadow-xs transition hover:border-primary ${
+                      lead.dealClosed
+                        ? "bg-emerald-500/5 border-emerald-500/30"
+                        : lead.dealLost
+                        ? "bg-rose-500/5 border-rose-500/30"
+                        : lead.meetingCancelled
+                        ? "bg-amber-500/5 border-amber-500/30"
+                        : "bg-background"
+                    }`}
                     onClick={() => setSelectedLead(lead)}
                   >
                     <div className="flex items-start justify-between gap-1">
                       <p className="font-display text-xs font-bold text-foreground line-clamp-1">{lead.leadName}</p>
-                      <Badge variant="outline" className="text-[9px] shrink-0">
-                        Stage {lead.stage}
-                      </Badge>
+                      {lead.dealClosed ? (
+                        <Badge className="bg-emerald-600 text-white text-[9px] shrink-0">Closed Won 🎉</Badge>
+                      ) : lead.dealLost ? (
+                        <Badge variant="destructive" className="text-[9px] shrink-0">Deal Lost</Badge>
+                      ) : lead.meetingCancelled ? (
+                        <Badge variant="outline" className="border-amber-500 text-amber-600 text-[9px] shrink-0">Cancelled</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[9px] shrink-0">Stage {lead.stage}</Badge>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground line-clamp-1">{lead.company}</p>
                     <p className="mt-1.5 text-[10px] font-semibold text-primary">{lead.service}</p>
+
+                    {/* Stage Badges & Milestones */}
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {lead.calendarInviteSent && (
+                        <Badge variant="secondary" className="text-[8px] bg-purple-500/10 text-purple-600 border-purple-500/20">
+                          📅 Invite Sent ({lead.meetingDate})
+                        </Badge>
+                      )}
+                      {lead.thankYouNoteSent && (
+                        <Badge variant="secondary" className="text-[8px] bg-amber-500/10 text-amber-700 border-amber-500/20">
+                          ✉️ Thank You Sent
+                        </Badge>
+                      )}
+                    </div>
 
                     <div className="mt-3 flex items-center justify-between border-t pt-2 text-[10px]">
                       <span className="text-muted-foreground">{lead.phone}</span>
@@ -258,10 +592,10 @@ function TelesalesJourneyPage() {
         })}
       </div>
 
-      {/* Selected Lead Workflow Inspector Modal */}
+      {/* Selected Lead Inspector Modal */}
       {selectedLead && (
         <Dialog open={true} onOpenChange={() => setSelectedLead(null)}>
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <Badge variant="outline" className="text-xs">
@@ -276,9 +610,27 @@ function TelesalesJourneyPage() {
             </DialogHeader>
 
             <div className="space-y-4 py-2">
+              {/* Quick Communication Customizer & Preview Launcher */}
+              <div className="flex items-center justify-between rounded-xl border bg-muted/40 p-2.5">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" /> Live Communication Simulation:
+                </span>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" className="h-7 text-[11px] rounded-lg" onClick={() => openCustomPreview(selectedLead, "Email")}>
+                    Email
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-[11px] rounded-lg" onClick={() => openCustomPreview(selectedLead, "WhatsApp")}>
+                    WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-[11px] rounded-lg" onClick={() => openCustomPreview(selectedLead, "Proposal")}>
+                    Quotation
+                  </Button>
+                </div>
+              </div>
+
               {/* Stage Progress Bar */}
               <div className="rounded-xl border p-3 bg-muted/20">
-                <p className="text-xs font-semibold mb-2">Workflow Progression:</p>
+                <p className="text-xs font-semibold mb-2">Workflow Progression Status:</p>
                 <div className="flex items-center justify-between text-[11px]">
                   {WORKFLOW_STAGES.map((s) => (
                     <div key={s.id} className="flex flex-col items-center">
@@ -300,26 +652,25 @@ function TelesalesJourneyPage() {
               {/* Stage Specific Action Checklist */}
               {selectedLead.stage === 1 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Stage 1: Lead Qualification Call</p>
+                  <p className="text-xs font-semibold text-foreground">Stage 1: Lead Qualification & Outreach</p>
                   <Button
                     className="w-full justify-between rounded-xl"
                     onClick={() => {
-                      toast.success("Appointment fixed! Moved to Stage 2.");
-                      advanceLeadStage(selectedLead.id, 2);
+                      setCalendarModalLead(selectedLead);
                     }}
                   >
-                    <span>Lead Interested? → Set Appointment</span>
-                    <ArrowRight className="h-4 w-4" />
+                    <span>Lead Interested → Set Appointment & Send Calendar Invite</span>
+                    <Calendar className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
                     className="w-full justify-between rounded-xl text-muted-foreground"
                     onClick={() => {
-                      toast.info("Marked for Future Reference.");
+                      toast.info("Marked for Future Follow-up.");
                       setSelectedLead(null);
                     }}
                   >
-                    <span>Not Interested → Save for Future Reference</span>
+                    <span>Not Interested Right Now → Save for Future Follow-up</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -327,92 +678,143 @@ function TelesalesJourneyPage() {
 
               {selectedLead.stage === 2 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Stage 2: Appointment Fixing</p>
-                  <Button
-                    className="w-full justify-between rounded-xl"
-                    onClick={() => {
-                      toast.success("Calendar invite sent to client!");
-                      advanceLeadStage(selectedLead.id, 3);
-                    }}
-                  >
-                    <span>Send Calendar Invite & Confirm Meeting</span>
-                    <Calendar className="h-4 w-4" />
-                  </Button>
+                  <p className="text-xs font-semibold text-foreground">Stage 2: Appointment Fixing & Calendar Invite</p>
+                  {selectedLead.calendarInviteSent ? (
+                    <div className="rounded-xl border bg-purple-500/10 p-3 text-xs border-purple-500/20 text-purple-900 dark:text-purple-200">
+                      <p className="font-bold flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-purple-600" /> Calendar Invite Sent!
+                      </p>
+                      <p className="mt-1 text-[11px]">Scheduled for: <strong>{selectedLead.meetingDate} at {selectedLead.meetingTime}</strong> via {selectedLead.meetingLocation}</p>
+                      <Button
+                        className="mt-2 w-full rounded-xl"
+                        onClick={() => advanceLeadStage(selectedLead.id, 3)}
+                      >
+                        <span>Proceed to Meeting Execution Stage →</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      className="w-full justify-between rounded-xl"
+                      onClick={() => setCalendarModalLead(selectedLead)}
+                    >
+                      <span>Book Meeting & Launch Calendar Invite Walkthrough</span>
+                      <Calendar className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               )}
 
               {selectedLead.stage === 3 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Stage 3: Meeting Execution</p>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-foreground">Stage 3: Meeting Outcome & Thank You Note</p>
+                  
+                  {/* Differentiated Meeting Outcomes */}
+                  <div className="grid grid-cols-3 gap-2">
                     <Button
-                      className="rounded-xl"
+                      className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
                       onClick={() => {
-                        toast.success("Meeting Attended! Thank you note sent.");
-                        advanceLeadStage(selectedLead.id, 4);
+                        setTyNoteContent(`Dear ${selectedLead.leadName},\n\nThank you for taking the time to meet with AY Astute Group today to discuss ${selectedLead.service} for ${selectedLead.company}.\n\nAs discussed, our team is preparing a customized proposal tailored to your requirements.\n\nBest regards,\nAY Astute Group Audit & Advisory Team`);
+                        setThankYouModalLead(selectedLead);
                       }}
                     >
-                      <CheckCircle2 className="mr-1.5 h-4 w-4" /> Meeting Attended
+                      <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Attended
                     </Button>
+
                     <Button
                       variant="outline"
-                      className="rounded-xl"
-                      onClick={() => toast.info("Reschedule reminder logged!")}
+                      className="rounded-xl border-amber-500/50 text-amber-700 hover:bg-amber-50"
+                      onClick={() => {
+                        toast.info("Reschedule Calendar Picker Opened");
+                        setCalendarModalLead(selectedLead);
+                      }}
                     >
-                      <RotateCcw className="mr-1.5 h-4 w-4" /> Client Rescheduled
+                      <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reschedule
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="rounded-xl border-rose-500/50 text-rose-700 hover:bg-rose-50"
+                      onClick={() => setCancellationModalLead(selectedLead)}
+                    >
+                      <XCircle className="mr-1 h-3.5 w-3.5" /> Cancelled
                     </Button>
                   </div>
+
+                  {selectedLead.meetingCancelled && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+                      <strong>Status: Meeting Cancelled</strong>
+                      <p className="text-[11px] mt-0.5">Reason: {selectedLead.cancellationReason}</p>
+                    </div>
+                  )}
+
+                  {selectedLead.thankYouNoteSent && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                      <strong>Thank You Note Sent!</strong>
+                      <Button
+                        size="sm"
+                        className="mt-2 w-full rounded-xl"
+                        onClick={() => advanceLeadStage(selectedLead.id, 4)}
+                      >
+                        <span>Advance to Proposal Stage →</span>
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
               {selectedLead.stage === 4 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Stage 4: Proposal & Quotation</p>
+                  <p className="text-xs font-semibold text-foreground">Stage 4: Service Quotation & Proposal</p>
                   <Button
                     className="w-full justify-between rounded-xl"
                     onClick={() => {
-                      toast.success("Service Quotation & Proposal sent to client!");
-                      advanceLeadStage(selectedLead.id, 5);
+                      advanceLeadStage(selectedLead.id, 5, { proposalSent: true });
+                      toast.success("Proposal & Quotation PDF Dispatched!");
                     }}
                   >
-                    <span>Send Proposal & Service Quotation PDF</span>
+                    <span>Send Proposal & Quotation PDF → Advance to Closing</span>
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
               )}
 
               {selectedLead.stage === 5 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Stage 5: Final Negotiation & Closing</p>
-                  <Button
-                    className="w-full justify-between rounded-xl bg-success text-success-foreground hover:bg-success/90"
-                    onClick={() => {
-                      toast.success("🎉 DEAL CLOSED! Initiating Post-Close Execution Handover.");
-                      setLeads(
-                        leads.map((l) =>
-                          l.id === selectedLead.id
-                            ? { ...l, stage: 6, dealClosed: true, executionStep: 1 }
-                            : l
-                        )
-                      );
-                      setSelectedLead({ ...selectedLead, stage: 6, dealClosed: true, executionStep: 1 });
-                    }}
-                  >
-                    <span>Mark DEAL CLOSED 🎉</span>
-                    <Handshake className="h-4 w-4" />
-                  </Button>
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-foreground">Stage 5: Final Negotiation & Closing Outcome</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 h-11"
+                      onClick={() => handleMarkDealClosed(selectedLead)}
+                    >
+                      <Handshake className="mr-1.5 h-4 w-4" /> Mark DEAL CLOSED (Won) 🎉
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="rounded-xl border-rose-500/50 text-rose-700 hover:bg-rose-50 h-11"
+                      onClick={() => setDealLostModalLead(selectedLead)}
+                    >
+                      <XCircle className="mr-1.5 h-4 w-4" /> Mark Deal Lost
+                    </Button>
+                  </div>
                 </div>
               )}
 
-              {/* Stage 6: Post-Close Execution Checklist */}
               {selectedLead.stage === 6 && (
-                <div className="space-y-3 rounded-xl border p-4 bg-success-soft/20 border-success/30">
+                <div className="space-y-3 rounded-xl border p-4 bg-emerald-500/10 border-emerald-500/30">
                   <div className="flex items-center justify-between">
-                    <p className="font-display text-sm font-bold text-success flex items-center gap-1.5">
+                    <p className="font-display text-sm font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                       <ShieldCheck className="h-4 w-4" /> Post-Close Client Onboarding & Handover
                     </p>
-                    <Badge variant="secondary" className="bg-success-soft text-success text-[10px]">
+                    <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-800 text-[10px]">
                       Step {selectedLead.executionStep ?? 1} of 7
+                    </Badge>
+                  </div>
+
+                  <div className="rounded-lg border bg-background/80 p-2 text-xs text-muted-foreground flex items-center justify-between">
+                    <span>✨ Auto-Created Customer Profile & Active Service Engagement</span>
+                    <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                      Synced to Services Tab
                     </Badge>
                   </div>
 
@@ -426,7 +828,7 @@ function TelesalesJourneyPage() {
                           key={s.step}
                           className={`flex items-center justify-between rounded-xl border p-2.5 text-xs transition ${
                             isDone
-                              ? "bg-success-soft/40 border-success/30 text-success"
+                              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-200"
                               : isCurrent
                               ? "bg-card border-primary text-foreground shadow-xs font-semibold"
                               : "bg-muted/30 text-muted-foreground"
@@ -441,7 +843,7 @@ function TelesalesJourneyPage() {
                           </div>
 
                           {isDone ? (
-                            <CheckCircle2 className="h-4 w-4 text-success" />
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                           ) : isCurrent ? (
                             <Button
                               size="sm"
@@ -465,6 +867,315 @@ function TelesalesJourneyPage() {
               <Button variant="outline" onClick={() => setSelectedLead(null)}>
                 Close Inspector
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 1. Calendar Invite Walkthrough Simulation Modal */}
+      {calendarModalLead && (
+        <Dialog open={true} onOpenChange={() => setCalendarModalLead(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" /> Book Meeting & Send Calendar Invite
+              </DialogTitle>
+              <DialogDescription>
+                Interactive calendar invite generator for {calendarModalLead.company}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[11px]">Meeting Date</Label>
+                  <Input type="date" value={calDate} onChange={(e) => setCalDate(e.target.value)} className="h-9 text-xs rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Time Slot (GST)</Label>
+                  <Input type="text" value={calTime} onChange={(e) => setCalTime(e.target.value)} className="h-9 text-xs rounded-xl" />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-[11px]">Meeting Type / Platform</Label>
+                <Select value={calType} onValueChange={setCalType}>
+                  <SelectTrigger className="h-9 rounded-xl text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MS Teams Virtual Call">MS Teams Virtual Video Call</SelectItem>
+                    <SelectItem value="Google Meet">Google Meet Video Call</SelectItem>
+                    <SelectItem value="In-Person Office Meeting (Dubai Office)">In-Person Office Meeting (Dubai Office)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-[11px]">Participants / Attendees</Label>
+                <Input value={calAttendees} onChange={(e) => setCalAttendees(e.target.value)} className="h-9 text-xs rounded-xl" />
+              </div>
+
+              {/* Live .ics Calendar Invite Simulation Box */}
+              <div className="rounded-xl border bg-muted/40 p-3 text-[11px] space-y-1 font-mono">
+                <p className="font-bold text-primary flex items-center gap-1">
+                  <Mail className="h-3.5 w-3.5" /> Simulated .ics Calendar Invitation:
+                </p>
+                <p><strong>To:</strong> {calendarModalLead.email}</p>
+                <p><strong>Subject:</strong> AY Astute Group — ${calendarModalLead.service} Kickoff</p>
+                <p><strong>When:</strong> {calDate} at {calTime} (Asia/Dubai)</p>
+                <p><strong>Location:</strong> {calType}</p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCalendarModalLead(null)}>Cancel</Button>
+              <Button className="rounded-xl" onClick={handleSendCalendarInvite}>
+                <Send className="mr-1.5 h-3.5 w-3.5" /> Dispatch Calendar Invite
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 2. Thank You Note Workflow Step Modal */}
+      {thankYouModalLead && (
+        <Dialog open={true} onOpenChange={() => setThankYouModalLead(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Mail className="h-5 w-5 text-emerald-600" /> Compose Post-Meeting Thank You Note
+              </DialogTitle>
+              <DialogDescription>
+                Customize thank-you email before advancing to Proposal stage
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2 text-xs">
+              <div>
+                <Label className="text-[11px]">Custom Message Body</Label>
+                <Textarea
+                  rows={6}
+                  value={tyNoteContent}
+                  onChange={(e) => setTyNoteContent(e.target.value)}
+                  className="rounded-xl text-xs font-sans"
+                />
+              </div>
+
+              <div className="rounded-xl border bg-emerald-500/10 border-emerald-500/20 p-2.5 text-[11px] text-emerald-900 dark:text-emerald-200">
+                <p className="font-bold">Flow Progression:</p>
+                <p>Meeting Attended → <strong>Thank You Note Sent</strong> → Proposal Dispatched</p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setThankYouModalLead(null)}>Cancel</Button>
+              <Button className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleSendThankYouNote}>
+                <Send className="mr-1.5 h-3.5 w-3.5" /> Send Note & Move to Proposal
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 3. Meeting Cancellation Reason Modal */}
+      {cancellationModalLead && (
+        <Dialog open={true} onOpenChange={() => setCancellationModalLead(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2 text-rose-600">
+                <XCircle className="h-5 w-5" /> Mark Meeting Cancelled
+              </DialogTitle>
+              <DialogDescription>Log cancellation reason for pipeline audit</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2 text-xs">
+              <div>
+                <Label className="text-[11px]">Cancellation Reason</Label>
+                <Select value={cancelReason} onValueChange={setCancelReason}>
+                  <SelectTrigger className="h-9 rounded-xl text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Client No-Show / Unavailable">Client No-Show / Unavailable</SelectItem>
+                    <SelectItem value="Rescheduled by Client to Unknown Date">Rescheduled by Client to Unknown Date</SelectItem>
+                    <SelectItem value="Client Cancelled — No Longer Interested">Client Cancelled — No Longer Interested</SelectItem>
+                    <SelectItem value="Duplicate Entry">Duplicate Entry</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCancellationModalLead(null)}>Back</Button>
+              <Button variant="destructive" className="rounded-xl" onClick={handleConfirmCancellation}>
+                Confirm Meeting Cancelled
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 4. Deal Lost Reason Modal */}
+      {dealLostModalLead && (
+        <Dialog open={true} onOpenChange={() => setDealLostModalLead(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2 text-rose-600">
+                <AlertCircle className="h-5 w-5" /> Mark Deal Lost
+              </DialogTitle>
+              <DialogDescription>Capture lost deal analytics for sales audit</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2 text-xs">
+              <div>
+                <Label className="text-[11px]">Primary Loss Reason</Label>
+                <Select value={lossReason} onValueChange={setLossReason}>
+                  <SelectTrigger className="h-9 rounded-xl text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Price High / Budget Constraints">Price High / Budget Constraints</SelectItem>
+                    <SelectItem value="Competitor Selected (Big 4 / Local Firm)">Competitor Selected (Big 4 / Local Firm)</SelectItem>
+                    <SelectItem value="Project Postponed to Next FY">Project Postponed to Next FY</SelectItem>
+                    <SelectItem value="Unresponsive / Lost Contact">Unresponsive / Lost Contact</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDealLostModalLead(null)}>Back</Button>
+              <Button variant="destructive" className="rounded-xl" onClick={handleConfirmDealLost}>
+                Confirm Deal Lost
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 5. Custom Communication Simulation & Live Preview Modal */}
+      {customPreviewLead && (
+        <Dialog open={true} onOpenChange={() => setCustomPreviewLead(null)}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" /> Customizable Outbound Communication & Live Client Preview
+              </DialogTitle>
+              <DialogDescription>
+                Customize content on the left and see real-time simulated client reception on the right.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2 text-xs">
+              {/* Left: Template Editor */}
+              <div className="space-y-3 rounded-xl border p-3 bg-muted/20">
+                <p className="font-bold text-foreground">Content Editor</p>
+                <div>
+                  <Label className="text-[11px]">Channel</Label>
+                  <Select value={previewChannel} onValueChange={(v: any) => setPreviewChannel(v)}>
+                    <SelectTrigger className="h-8 rounded-xl text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Email">Email Template</SelectItem>
+                      <SelectItem value="WhatsApp">WhatsApp Message</SelectItem>
+                      <SelectItem value="Proposal">Quotation Summary</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px]">Subject / Title</Label>
+                  <Input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} className="h-8 text-xs rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Message Body</Label>
+                  <Textarea rows={6} value={customBody} onChange={(e) => setCustomBody(e.target.value)} className="text-xs rounded-xl" />
+                </div>
+              </div>
+
+              {/* Right: Live Simulated Client View */}
+              <div className="rounded-xl border bg-card p-3 shadow-inner flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between border-b pb-2 mb-2">
+                    <span className="font-bold text-xs text-primary flex items-center gap-1">
+                      📱 Live Client View Simulation
+                    </span>
+                    <Badge variant="outline" className="text-[9px]">{previewChannel}</Badge>
+                  </div>
+
+                  <div className="rounded-lg border bg-background p-3 space-y-2 font-sans">
+                    <p className="text-[11px] font-bold text-foreground">{customSubject}</p>
+                    <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">{customBody}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-2 border-t text-[10px] text-muted-foreground text-center">
+                  ✨ Powered by SendGrid & Meta WhatsApp Cloud API Integration
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCustomPreviewLead(null)}>Close</Button>
+              <Button className="rounded-xl" onClick={() => { toast.success(`Simulated ${previewChannel} sent to client!`); setCustomPreviewLead(null); }}>
+                <Send className="mr-1.5 h-3.5 w-3.5" /> Dispatch Test Message
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 6. Customers vs Leads Data Lifecycle Explainer Modal */}
+      {lifecycleExplainerOpen && (
+        <Dialog open={true} onOpenChange={() => setLifecycleExplainerOpen(false)}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Info className="h-5 w-5 text-primary" /> Data Architecture: Customers vs Leads & Contacts
+              </DialogTitle>
+              <DialogDescription>
+                Visual data lifecycle and background synchronization process across AY Astute Group CRM
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2 text-xs">
+              <div className="rounded-xl border bg-card p-4 space-y-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 font-bold">1</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Leads & Telesales Journey</h4>
+                    <p className="text-[11px] text-muted-foreground">Unqualified prospects undergoing telesales outreach, calls, appointments, and initial quotations.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t pt-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 font-bold">2</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Contacts</h4>
+                    <p className="text-[11px] text-muted-foreground">Individual decision-makers (CFO, Finance Manager, CEO) associated with Lead or Customer accounts.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t pt-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 font-bold">3</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Customers (Contracted Accounts)</h4>
+                    <p className="text-[11px] text-muted-foreground">Active, paying client accounts with signed agreements and active service engagements.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-emerald-500/10 border-emerald-500/20 p-3 text-[11px] text-emerald-900 dark:text-emerald-200">
+                <p className="font-bold flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Automatic Background Sync:
+                </p>
+                <p className="mt-1">When a deal is marked <strong>"DEAL CLOSED (Won)"</strong> in Stage 5, the CRM automatically promotes the lead into the <strong>Customers</strong> database and creates an <strong>Active Service Engagement</strong> in the Services tab.</p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button className="rounded-xl" onClick={() => setLifecycleExplainerOpen(false)}>Understood</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

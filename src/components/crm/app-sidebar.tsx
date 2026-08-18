@@ -10,6 +10,7 @@ import { useRole, ROLE_MENU } from "@/lib/role-context";
 
 const ITEMS = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Leads", url: "/leads", icon: UserPlus },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Telesales Journey", url: "/telesales", icon: GitMerge },
   { title: "Services", url: "/services", icon: Package },

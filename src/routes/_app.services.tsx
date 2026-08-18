@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  Award, Check, ChevronDown, ChevronUp, Plus, ShieldCheck, FileText, Building2, Globe
+  Award, Check, ChevronDown, ChevronUp, Plus, ShieldCheck, FileText, Building2, Globe, Lock, ShieldAlert, Sparkles
 } from "lucide-react";
 import { PageHeader, SectionCard, StatusBadge } from "@/components/crm/primitives";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useRole } from "@/lib/role-context";
+import { ACTIVE_SERVICES, type ServiceRow } from "@/data/crm";
 
 export const Route = createFileRoute("/_app/services")({
   head: () => ({
@@ -165,15 +167,42 @@ const AY_SERVICE_CATALOGUE: ServiceCategory[] = [
   },
 ];
 
-const ACTIVE_ENGAGEMENTS = [
-  { id: "eng-1", customer: "Capital Health UAE", service: "Statutory Audit 2024-2025", value: 28500, status: "Active" },
-  { id: "eng-2", customer: "Royal Crest Real Estate DMCC", service: "Corporate Tax Retainer & Filing", value: 18000, status: "Active" },
-  { id: "eng-3", customer: "Apex Tech Innovations FZ-LLC", service: "VAT Return Filing (Quarterly)", value: 6000, status: "Active" },
+const MOCK_SERVICES: (ServiceRow & { customer: string; caller: string; autoCreated?: boolean })[] = [
+  { id: "SVC-1001", customer: "LuLu Group International", service: "Statutory Audit — FY 2025", start: "2025-01-01", end: "2026-04-30", amount: 45000, status: "Active", caller: "Priya Menon" },
+  { id: "SVC-1002", customer: "Komatsu Middle East", service: "Corporate Tax Advisory (Retainer)", start: "2025-11-01", end: "2026-10-31", amount: 60000, status: "Expiring", caller: "Rahul Sharma" },
+  { id: "SVC-1003", customer: "Apex Tech Innovations FZ-LLC", service: "VAT Return Filing (Quarterly)", start: "2025-08-15", end: "2026-08-14", amount: 18000, status: "Active", caller: "Priya Menon" },
+  { id: "SVC-1004", customer: "Nordic Tech Ventures DMCC", service: "Transfer Pricing Documentation", start: "2026-08-10", end: "2027-08-09", amount: 35000, status: "Active", caller: "Priya Menon", autoCreated: true },
 ];
 
 function Services() {
+  const { role } = useRole();
   const [expandedId, setExpandedId] = useState<string | null>("cat-1");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [servicesList, setServicesList] = useState(MOCK_SERVICES);
+
+  // Combine dynamic ACTIVE_SERVICES from mock state
+  const combinedServices = [...servicesList];
+  ACTIVE_SERVICES.forEach((eng) => {
+    if (!combinedServices.some((s) => s.id === eng.id)) {
+      combinedServices.unshift({
+        id: eng.id,
+        customer: "Closed Deal Lead",
+        service: eng.service,
+        start: eng.start,
+        end: eng.end,
+        amount: eng.amount,
+        status: eng.status,
+        caller: "Priya Menon",
+        autoCreated: true,
+      });
+    }
+  });
+
+  // Role-based filtering: Agents see only assigned service engagements!
+  const isAgentView = role === "Caller";
+  const displayedServices = isAgentView
+    ? combinedServices.filter((s) => s.caller === "Priya Menon")
+    : combinedServices;
 
   return (
     <div className="mx-auto max-w-[1400px]">
@@ -186,6 +215,31 @@ function Services() {
           </Button>
         }
       />
+
+      {/* Role View Banner Notification */}
+      {isAgentView ? (
+        <div className="mb-6 rounded-2xl border bg-amber-500/10 border-amber-500/30 p-4 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>🔒 Agent Role Permissions Active (Viewing as Caller — Priya Menon):</strong> Displaying only {displayedServices.length} service engagements assigned to your account.
+            </span>
+          </div>
+          <Badge variant="outline" className="border-amber-500/40 text-amber-700 bg-amber-100/50 dark:bg-amber-950/50">
+            Agent RBAC Active
+          </Badge>
+        </div>
+      ) : (
+        <div className="mb-6 rounded-2xl border bg-primary/5 border-primary/20 p-4 text-xs text-primary flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+            <span>
+              <strong>Management Visibility ({role}):</strong> Displaying all organizational service engagements across all 5 telesales agents.
+            </span>
+          </div>
+          <Badge className="bg-primary text-primary-foreground">Full Org View ({role})</Badge>
+        </div>
+      )}
 
       {/* Brand Credentials Banner */}
       <div className="mb-6 rounded-2xl border bg-gradient-to-r from-primary/10 via-card to-card p-5 shadow-sm">
@@ -230,25 +284,34 @@ function Services() {
       </div>
 
       {/* Active Service Engagements */}
-      <SectionCard title="Active Service Engagements" description="Currently running client service contracts">
+      <SectionCard title="Active Service Engagements" description="Currently running client service contracts & auto-created deals">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Customer Account</TableHead>
               <TableHead>Service Engagement</TableHead>
+              <TableHead>Assigned Rep</TableHead>
               <TableHead>Value (AED)</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Status & Origin</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {ACTIVE_ENGAGEMENTS.map((eng) => (
+            {displayedServices.map((eng) => (
               <TableRow key={eng.id} className="hover:bg-accent/40">
                 <TableCell className="font-bold text-foreground">{eng.customer}</TableCell>
                 <TableCell className="text-xs font-medium text-primary">{eng.service}</TableCell>
-                <TableCell className="font-mono text-xs font-bold">AED {eng.value.toLocaleString()}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{eng.caller}</TableCell>
+                <TableCell className="font-mono text-xs font-bold">AED {eng.amount.toLocaleString()}</TableCell>
                 <TableCell>
-                  <StatusBadge status={eng.status} />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <StatusBadge status={eng.status} />
+                    {eng.autoCreated && (
+                      <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-300">
+                        ⚡ Auto-Created (Closed Deal)
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => toast.success("Renewal workflow initiated!")}>
@@ -335,7 +398,7 @@ function Services() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                toast.success("Service engagement created!");
+                toast.success("Manual service engagement created!");
                 setIsAddModalOpen(false);
               }}
               className="space-y-4 py-2"

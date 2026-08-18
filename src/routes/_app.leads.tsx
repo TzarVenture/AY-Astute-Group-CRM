@@ -6,12 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Search, Plus, Globe, MessageCircle, UserPlus, Users, Chrome, Filter, Phone, Mail, ChevronDown, History, DollarSign, Calendar, Building2, UserCheck, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+import { useRole } from "@/lib/role-context";
+import { Badge } from "@/components/ui/badge";
+import { Lock, ShieldCheck, Info, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/leads")({
   head: () => ({ meta: [{ title: "Lead Status Management — AY Astute Group CRM" }] }),
@@ -23,6 +27,7 @@ const SOURCE_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
 };
 
 function Leads() {
+  const { role } = useRole();
   const [leadsList, setLeadsList] = useState<Lead[]>(LEADS);
   const [activeTab, setActiveTab] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -30,7 +35,10 @@ function Leads() {
   const [selectedAssignee, setSelectedAssignee] = useState<string>("All");
   const [selectedLeadForDetails, setSelectedLeadForDetails] = useState<Lead | null>(null);
   const [newLeadDialogOpen, setNewLeadDialogOpen] = useState(false);
+  const [lifecycleExplainerOpen, setLifecycleExplainerOpen] = useState(false);
   const [newLeadForm, setNewLeadForm] = useState({ name: "", company: "", email: "", phone: "", source: "Website", assigned: "Priya Menon", dealValue: "25000", status: "Not Contacted" as LeadStatus });
+
+  const isAgentView = role === "Caller";
 
   // Update status function
   const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
@@ -104,6 +112,8 @@ function Leads() {
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return leadsList.filter((l) => {
+      // Role-based filtering for Agent View
+      if (isAgentView && l.assigned !== "Priya Menon") return false;
       // Tab status filter
       if (activeTab !== "All" && l.status !== activeTab) return false;
       // Search filter
@@ -122,7 +132,7 @@ function Leads() {
       if (selectedAssignee !== "All" && l.assigned !== selectedAssignee) return false;
       return true;
     });
-  }, [leadsList, activeTab, searchQuery, selectedSource, selectedAssignee]);
+  }, [leadsList, activeTab, searchQuery, selectedSource, selectedAssignee, isAgentView]);
 
   return (
     <div className="mx-auto max-w-[1400px]">
@@ -131,12 +141,40 @@ function Leads() {
         subtitle="Manage end-to-end sales lead statuses, track history, and filter by pipeline stage."
         actions={
           <div className="flex gap-2">
+            <Button variant="outline" className="rounded-xl border-primary/30 text-primary hover:bg-primary/5" onClick={() => setLifecycleExplainerOpen(true)}>
+              <Info className="mr-1.5 h-4 w-4" /> Data Flow Explainer
+            </Button>
             <Button onClick={() => setNewLeadDialogOpen(true)} className="rounded-xl shadow-sm">
               <Plus className="mr-1.5 h-4 w-4" /> Add New Lead
             </Button>
           </div>
         }
       />
+
+      {/* Role View Alert Banner */}
+      {isAgentView ? (
+        <div className="mb-4 rounded-2xl border bg-amber-500/10 border-amber-500/30 p-4 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>🔒 Agent Role Permissions Active (Viewing as Caller — Priya Menon):</strong> Displaying only {filteredLeads.length} leads assigned to your queue.
+            </span>
+          </div>
+          <Badge variant="outline" className="border-amber-500/40 text-amber-700 bg-amber-100/50">
+            Agent RBAC Active
+          </Badge>
+        </div>
+      ) : (
+        <div className="mb-4 rounded-2xl border bg-primary/5 border-primary/20 p-4 text-xs text-primary flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+            <span>
+              <strong>Management Org View ({role}):</strong> Displaying all company leads across all telesales callers.
+            </span>
+          </div>
+          <Badge className="bg-primary text-primary-foreground">Full Org View ({role})</Badge>
+        </div>
+      )}
 
       {/* Configurable Status Quick Filters Bar */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5 rounded-2xl border bg-card p-2 shadow-sm overflow-x-auto">
@@ -501,6 +539,61 @@ function Leads() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Data Architecture & Lifecycle Explainer Modal */}
+      {lifecycleExplainerOpen && (
+        <Dialog open={true} onOpenChange={() => setLifecycleExplainerOpen(false)}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Info className="h-5 w-5 text-primary" /> Data Architecture: Leads vs Contacts vs Customers
+              </DialogTitle>
+              <DialogDescription>
+                How lead data is structured, synchronized, and promoted across AY Astute Group CRM
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2 text-xs">
+              <div className="rounded-xl border bg-card p-4 space-y-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 font-bold">1</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Leads Section (Here)</h4>
+                    <p className="text-[11px] text-muted-foreground">The master database of all raw and qualified leads, categorized by 9 status indicators (Not Contacted, Call Back, DND, etc.) and auto dialer integration.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t pt-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 font-bold">2</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Telesales Journey</h4>
+                    <p className="text-[11px] text-muted-foreground">The active visual pipeline (Stages 1 through 6) governing appointment booking, meeting execution, thank-you notes, and proposal dispatches.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t pt-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 font-bold">3</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Customers Directory</h4>
+                    <p className="text-[11px] text-muted-foreground">Won client accounts with active MOE audit or corporate tax service contracts. Automatically promoted upon marking a deal closed!</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-emerald-500/10 border-emerald-500/20 p-3 text-[11px] text-emerald-900 dark:text-emerald-200">
+                <p className="font-bold flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Automatic Data Sync:
+                </p>
+                <p className="mt-1">Updating a status in this <strong>Leads</strong> table automatically syncs with the <strong>Telesales Journey</strong> pipeline and vice versa. Closing a deal promotes the lead to <strong>Customers</strong>.</p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button className="rounded-xl" onClick={() => setLifecycleExplainerOpen(false)}>Understood</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
