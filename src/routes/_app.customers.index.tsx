@@ -10,8 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Download, Plus, Filter, RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Search, Download, Plus, Filter, RotateCcw, Info, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/lib/role-context";
 
 export const Route = createFileRoute("/_app/customers/")({
   head: () => ({ meta: [{ title: "Customers — AY Astute Group CRM" }, { name: "description", content: "All customers." }] }),
@@ -19,6 +21,7 @@ export const Route = createFileRoute("/_app/customers/")({
 });
 
 function CustomersList() {
+  const { role } = useRole();
   const [customerList, setCustomerList] = useState<Customer[]>(CUSTOMERS);
   const [q, setQ] = useState("");
   const [selectedCity, setSelectedCity] = useState<string>("All");
@@ -27,6 +30,7 @@ function CustomersList() {
   const [selectedCaller, setSelectedCaller] = useState<string>("All");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [lifecycleModalOpen, setLifecycleModalOpen] = useState(false);
 
   // New Customer Form State
   const [newName, setNewName] = useState("");
@@ -37,9 +41,17 @@ function CustomersList() {
   const [newTrn, setNewTrn] = useState("100234567800009");
   const [newService, setNewService] = useState("Corporate Tax Retainer & Filing");
 
+  // Role Based Filter logic
+  const isAgentView = role === "Caller";
+
   // Real-Time Multi-Attribute Filtering
   const filtered = useMemo(() => {
     return customerList.filter((c) => {
+      // If in Agent view (Caller), enforce filtering by assigned caller
+      if (isAgentView && c.caller !== "Priya Menon") {
+        return false;
+      }
+
       const matchSearch =
         !q ||
         c.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -55,7 +67,7 @@ function CustomersList() {
 
       return matchSearch && matchCity && matchStatus && matchService && matchCaller;
     });
-  }, [customerList, q, selectedCity, selectedStatus, selectedService, selectedCaller]);
+  }, [customerList, q, selectedCity, selectedStatus, selectedService, selectedCaller, isAgentView]);
 
   const allChecked = filtered.length > 0 && selectedIds.length === filtered.length;
 
@@ -112,16 +124,44 @@ function CustomersList() {
         title="Customer Directory"
         subtitle={`${filtered.length} active client accounts across the UAE`}
         actions={
-          <>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="rounded-xl border-primary/30 text-primary hover:bg-primary/5" onClick={() => setLifecycleModalOpen(true)}>
+              <Info className="mr-1.5 h-4 w-4" /> Data Lifecycle Explainer
+            </Button>
             <Button variant="outline" className="rounded-xl" onClick={exportCsv}>
               <Download className="mr-1.5 h-4 w-4" /> Export CSV
             </Button>
             <Button className="rounded-xl" onClick={() => setIsAddModalOpen(true)}>
               <Plus className="mr-1.5 h-4 w-4" /> New Customer
             </Button>
-          </>
+          </div>
         }
       />
+
+      {/* Role View Alert Banner */}
+      {isAgentView ? (
+        <div className="mb-6 rounded-2xl border bg-amber-500/10 border-amber-500/30 p-4 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>🔒 Agent Role View Active (Caller — Priya Menon):</strong> Displaying only {filtered.length} accounts assigned to your telesales desk.
+            </span>
+          </div>
+          <Badge variant="outline" className="border-amber-500/40 text-amber-700 bg-amber-100/50">
+            Agent RBAC Active
+          </Badge>
+        </div>
+      ) : (
+        <div className="mb-6 rounded-2xl border bg-primary/5 border-primary/20 p-4 text-xs text-primary flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+            <span>
+              <strong>Management Org View ({role}):</strong> Displaying all customer accounts across all telesales agents.
+            </span>
+          </div>
+          <Badge className="bg-primary text-primary-foreground">Full Org View</Badge>
+        </div>
+      )}
 
       <div className="rounded-2xl border bg-card shadow-sm">
         {/* Filter Controls Bar */}
@@ -179,18 +219,19 @@ function CustomersList() {
               </SelectContent>
             </Select>
 
-            {/* Caller Filter */}
-            <Select value={selectedCaller} onValueChange={setSelectedCaller}>
-              <SelectTrigger className="h-10 w-[130px] rounded-xl">
-                <SelectValue placeholder="Caller" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Callers</SelectItem>
-                <SelectItem value="Priya Menon">Priya Menon</SelectItem>
-                <SelectItem value="Rahul Sharma">Rahul Sharma</SelectItem>
-                <SelectItem value="Anita Desai">Anita Desai</SelectItem>
-              </SelectContent>
-            </Select>
+            {!isAgentView && (
+              <Select value={selectedCaller} onValueChange={setSelectedCaller}>
+                <SelectTrigger className="h-10 w-[130px] rounded-xl">
+                  <SelectValue placeholder="Caller" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Callers</SelectItem>
+                  <SelectItem value="Priya Menon">Priya Menon</SelectItem>
+                  <SelectItem value="Rahul Sharma">Rahul Sharma</SelectItem>
+                  <SelectItem value="Anita Desai">Anita Desai</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
 
             <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl" onClick={resetFilters} title="Reset filters">
               <RotateCcw className="h-4 w-4" />
@@ -219,132 +260,186 @@ function CustomersList() {
                 <TableHead className="w-10">
                   <Checkbox
                     checked={allChecked}
-                    onCheckedChange={(v) => setSelectedIds(v ? filtered.map((c) => c.id) : [])}
+                    onCheckedChange={(c) => {
+                      if (c) setSelectedIds(filtered.map((x) => x.id));
+                      else setSelectedIds([]);
+                    }}
                   />
                 </TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Customer ID</TableHead>
-                <TableHead>Mobile</TableHead>
+                <TableHead>Customer / Company</TableHead>
                 <TableHead>TRN Number</TableHead>
-                <TableHead>City</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Active Service</TableHead>
+                <TableHead>Assigned Agent</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Service Engagement</TableHead>
-                <TableHead>Assigned Partner</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
-                    No customers found matching your filter criteria.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((c) => (
-                  <TableRow key={c.id} className="hover:bg-accent/50">
+              {filtered.map((c) => {
+                const isSelected = selectedIds.includes(c.id);
+                return (
+                  <TableRow key={c.id} className={isSelected ? "bg-accent/50" : ""}>
                     <TableCell>
                       <Checkbox
-                        checked={selectedIds.includes(c.id)}
-                        onCheckedChange={(v) =>
-                          setSelectedIds(v ? [...selectedIds, c.id] : selectedIds.filter((i) => i !== c.id))
-                        }
+                        checked={isSelected}
+                        onCheckedChange={(ch) => {
+                          if (ch) setSelectedIds([...selectedIds, c.id]);
+                          else setSelectedIds(selectedIds.filter((id) => id !== c.id));
+                        }}
                       />
                     </TableCell>
+
                     <TableCell>
-                      <Link to="/customers/$id" params={{ id: c.id }} className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
+                      <Link to="/customers/$id" params={{ id: c.id }} className="flex items-center gap-3 hover:underline">
+                        <Avatar className="h-9 w-9">
                           <AvatarImage src={c.avatar} />
-                          <AvatarFallback>{c.name[0]}</AvatarFallback>
+                          <AvatarFallback>{c.name.slice(0, 2)}</AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="text-sm font-medium hover:text-primary">{c.name}</p>
+                          <p className="font-bold text-foreground leading-tight">{c.name}</p>
                           <p className="text-xs text-muted-foreground">{c.company}</p>
                         </div>
                       </Link>
                     </TableCell>
-                    <TableCell className="font-mono text-xs font-semibold">{c.id}</TableCell>
-                    <TableCell className="text-xs">{c.mobile}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{c.trn || "N/A"}</TableCell>
-                    <TableCell className="text-xs">{c.city}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={c.status} />
-                    </TableCell>
+
+                    <TableCell className="font-mono text-xs font-semibold">{c.trn || "—"}</TableCell>
+                    <TableCell className="text-xs">{c.city}, {c.country}</TableCell>
                     <TableCell className="text-xs font-semibold text-primary">{c.service}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{c.caller}</TableCell>
+                    <TableCell><StatusBadge status={c.status} /></TableCell>
+
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" asChild>
+                        <Link to="/customers/$id" params={{ id: c.id }}>View Profile</Link>
+                      </Button>
+                    </TableCell>
                   </TableRow>
-                ))
+                );
+              })}
+
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                    No customers found matching your filter criteria.
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
         </div>
       </div>
 
-      {/* Add Customer Modal Dialog */}
+      {/* Add Customer Modal */}
       {isAddModalOpen && (
         <Dialog open={true} onOpenChange={() => setIsAddModalOpen(false)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Onboard New Client</DialogTitle>
-              <DialogDescription>Register a new client company into AY Astute Group CRM.</DialogDescription>
+              <DialogTitle>Onboard New Customer</DialogTitle>
+              <DialogDescription>Add a new corporate client account to the CRM directory.</DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleCreateCustomer} className="space-y-4 py-2">
+            <form onSubmit={handleCreateCustomer} className="space-y-3 py-2 text-xs">
               <div>
-                <Label htmlFor="cn">Primary Contact Name *</Label>
-                <Input id="cn" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Tariq Al Mansoori" required />
+                <Label htmlFor="c-name">Contact Person Name *</Label>
+                <Input id="c-name" value={newName} onChange={(e) => setNewName(e.target.value)} required className="h-9 text-xs rounded-xl" />
               </div>
               <div>
-                <Label htmlFor="cc">Company Name *</Label>
-                <Input id="cc" value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="Apex Global Trading FZE" required />
+                <Label htmlFor="c-comp">Company Name *</Label>
+                <Input id="c-comp" value={newCompany} onChange={(e) => setNewCompany(e.target.value)} required className="h-9 text-xs rounded-xl" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label htmlFor="ce">Work Email</Label>
-                  <Input id="ce" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="tariq@apex.ae" />
+                  <Label htmlFor="c-email">Email Address</Label>
+                  <Input id="c-email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="h-9 text-xs rounded-xl" />
                 </div>
                 <div>
-                  <Label htmlFor="cp">Mobile Number</Label>
-                  <Input id="cp" value={newMobile} onChange={(e) => setNewMobile(e.target.value)} placeholder="+971 50 123 4567" />
+                  <Label htmlFor="c-mob">Mobile Phone</Label>
+                  <Input id="c-mob" value={newMobile} onChange={(e) => setNewMobile(e.target.value)} className="h-9 text-xs rounded-xl" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label>Emirate / City</Label>
+                  <Label htmlFor="c-city">City</Label>
                   <Select value={newCity} onValueChange={setNewCity}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Dubai">Dubai</SelectItem>
                       <SelectItem value="Abu Dhabi">Abu Dhabi</SelectItem>
                       <SelectItem value="Sharjah">Sharjah</SelectItem>
-                      <SelectItem value="Ajman">Ajman</SelectItem>
+                      <SelectItem value="Ras Al Khaimah">Ras Al Khaimah</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="ctrn">TRN Number</Label>
-                  <Input id="ctrn" value={newTrn} onChange={(e) => setNewTrn(e.target.value)} placeholder="100234567800009" />
+                  <Label htmlFor="c-trn">TRN Number</Label>
+                  <Input id="c-trn" value={newTrn} onChange={(e) => setNewTrn(e.target.value)} className="h-9 text-xs rounded-xl" />
                 </div>
-              </div>
-              <div>
-                <Label>Service Pillar</Label>
-                <Select value={newService} onValueChange={setNewService}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Statutory Audit 2025 (MOE Approved)">Statutory Audit (MOE Approved)</SelectItem>
-                    <SelectItem value="Corporate Tax Retainer & Filing">Corporate Tax Retainer & Filing</SelectItem>
-                    <SelectItem value="VAT Return Filing (Quarterly)">VAT Return Filing (Quarterly)</SelectItem>
-                    <SelectItem value="Transfer Pricing Local File">Transfer Pricing Documentation</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <DialogFooter className="pt-2">
-                <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
-                  Cancel
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
                 <Button type="submit">Onboard Client</Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Data Lifecycle Explainer Modal */}
+      {lifecycleModalOpen && (
+        <Dialog open={true} onOpenChange={() => setLifecycleModalOpen(false)}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Info className="h-5 w-5 text-primary" /> Data Architecture & Lifecycle Explainer
+              </DialogTitle>
+              <DialogDescription>
+                How Leads, Contacts, and Customer Accounts synchronize across AY Astute Group CRM
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2 text-xs">
+              <div className="rounded-xl border bg-card p-4 space-y-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 font-bold">1</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Leads</h4>
+                    <p className="text-[11px] text-muted-foreground">Prospects undergoing qualification in the Telesales Journey. Contains call logs, scheduled appointment slots, and quotation states.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t pt-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 font-bold">2</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Contacts</h4>
+                    <p className="text-[11px] text-muted-foreground">Specific individuals (e.g. CFO, Finance Manager) linked to a Lead or Customer account with contact info.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t pt-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 font-bold">3</div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Customers (Contracted Accounts)</h4>
+                    <p className="text-[11px] text-muted-foreground">Won clients with active statutory audit or corporate tax service engagements. Auto-promoted upon marking deal closed!</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-emerald-500/10 border-emerald-500/20 p-3 text-[11px] text-emerald-900 dark:text-emerald-200">
+                <p className="font-bold flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Automatic Background Sync:
+                </p>
+                <p className="mt-1">When a deal is marked <strong>"DEAL CLOSED (Won)"</strong> in the Telesales Journey, the record is auto-promoted into this <strong>Customer Directory</strong> with an audit badge.</p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button className="rounded-xl" onClick={() => setLifecycleModalOpen(false)}>Understood</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

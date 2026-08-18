@@ -22,6 +22,7 @@ export const useRole = () => useContext(RoleContext);
 export const ROLE_MENU: Record<Role, string[]> = {
   Admin: [
     "Dashboard",
+    "Leads",
     "Customers",
     "Telesales Journey",
     "Services",
@@ -34,6 +35,7 @@ export const ROLE_MENU: Record<Role, string[]> = {
   ],
   Manager: [
     "Dashboard",
+    "Leads",
     "Customers",
     "Telesales Journey",
     "Services",
@@ -45,6 +47,7 @@ export const ROLE_MENU: Record<Role, string[]> = {
   ],
   "Team Leader": [
     "Dashboard",
+    "Leads",
     "Customers",
     "Telesales Journey",
     "Follow Ups",
@@ -52,6 +55,7 @@ export const ROLE_MENU: Record<Role, string[]> = {
   ],
   Caller: [
     "Dashboard",
+    "Leads",
     "Customers",
     "Telesales Journey",
     "Follow Ups",
