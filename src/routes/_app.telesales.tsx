@@ -5,7 +5,8 @@ import {
   GitMerge, CheckCircle2, ArrowRight, Calendar, FileText, Send, Mail,
   CreditCard, DollarSign, Handshake, ChevronRight, UserPlus, Clock, Sparkles,
   Phone, MessageSquare, Play, RotateCcw, AlertCircle, ShieldCheck, Award,
-  Eye, Filter, XCircle, RefreshCw, Layers, Check, Info, ArrowUpRight
+  Eye, Filter, XCircle, RefreshCw, Layers, Check, Info, ArrowUpRight,
+  TrendingUp, Target, BarChart3, Users, UserCheck
 } from "lucide-react";
 import { PageHeader, SectionCard, StatusBadge, KpiCard } from "@/components/crm/primitives";
 import { Button } from "@/components/ui/button";
@@ -19,8 +20,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { CUSTOMERS, ACTIVE_SERVICES, type Customer, type ServiceRow } from "@/data/crm";
+import { CUSTOMERS, ACTIVE_SERVICES, TELESALES_AGENT_METRICS, type Customer, type ServiceRow, type AgentPerformance, type CustomerNote } from "@/data/crm";
 
 export const Route = createFileRoute("/_app/telesales")({
   head: () => ({
@@ -189,6 +191,37 @@ const POST_CLOSE_STEPS = [
 function TelesalesJourneyPage() {
   const [leads, setLeads] = useState<LeadWorkflowState[]>(INITIAL_DEMO_LEADS);
   const [selectedLead, setSelectedLead] = useState<LeadWorkflowState | null>(null);
+
+  // View Switcher (Pipeline vs Performance Dashboard)
+  const [activeView, setActiveView] = useState<"pipeline" | "performance">("pipeline");
+  const [perfTimeframe, setPerfTimeframe] = useState<"daily" | "weekly" | "monthly">("daily");
+
+  // Lead Inspector Call Remarks Logger State
+  const [inspCategory, setInspCategory] = useState<"Requirement Identified" | "Objection Raised" | "Agreed Action" | "Client Feedback">("Requirement Identified");
+  const [inspText, setInspText] = useState("");
+  const [inspFollowUp, setInspFollowUp] = useState("2026-08-25");
+  const [leadNotesMap, setLeadNotesMap] = useState<Record<string, CustomerNote[]>>({
+    "tw-101": [
+      {
+        id: "n-101",
+        agent: "Priya Menon",
+        timestamp: "17 Aug 2026, 02:15 PM",
+        category: "Requirement Identified",
+        text: "Discussed FY 2026 corporate tax retainer scope. Client requested formal quotation for group entity filing.",
+        nextFollowUpDate: "2026-08-22",
+      },
+    ],
+    "tw-102": [
+      {
+        id: "n-102",
+        agent: "Priya Menon",
+        timestamp: "16 Aug 2026, 11:30 AM",
+        category: "Agreed Action",
+        text: "Confirmed MS Teams meeting for 20th Aug at 11:00 AM with Audit Director.",
+        nextFollowUpDate: "2026-08-20",
+      },
+    ],
+  });
 
   // Filters State
   const [dateRange, setDateRange] = useState<string>("All"); // All, Today, This Week, This Month
@@ -368,6 +401,24 @@ function TelesalesJourneyPage() {
     }
   }
 
+  function handleAddLeadNote(leadId: string) {
+    if (!inspText.trim()) return;
+    const newNote: CustomerNote = {
+      id: `n-${Date.now()}`,
+      agent: "Priya Menon",
+      timestamp: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      category: inspCategory,
+      text: inspText,
+      nextFollowUpDate: inspFollowUp,
+    };
+    setLeadNotesMap((prev) => ({
+      ...prev,
+      [leadId]: [newNote, ...(prev[leadId] || [])],
+    }));
+    setInspText("");
+    toast.success("Call remark & interaction note logged successfully!");
+  }
+
   const activeStageList = isFocusMode ? [1] : visibleStages;
 
   return (
@@ -387,116 +438,327 @@ function TelesalesJourneyPage() {
         }
       />
 
-      {/* Control & Filter Toolbar */}
-      <div className="mb-6 rounded-2xl border bg-card p-4 shadow-sm flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        {/* Date Range Filter */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" /> Date Filter:
-          </span>
-          {["All", "Today", "This Week", "This Month"].map((range) => (
-            <Button
-              key={range}
-              size="sm"
-              variant={dateRange === range ? "default" : "outline"}
-              className="h-8 rounded-xl text-xs"
-              onClick={() => setDateRange(range)}
-            >
-              {range}
-            </Button>
-          ))}
-        </div>
-
-        {/* Visibility & Focus Mode Configurator */}
+      {/* Top View Mode Navigation (Sales Pipeline vs Telesales Performance Dashboard) */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl border bg-card p-2 shadow-xs">
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            variant={isFocusMode ? "default" : "outline"}
-            className={`h-8 rounded-xl text-xs font-medium transition ${
-              isFocusMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
-            }`}
-            onClick={() => setIsFocusMode(!isFocusMode)}
+            variant={activeView === "pipeline" ? "default" : "ghost"}
+            className="rounded-xl font-medium text-xs px-4 h-9"
+            onClick={() => setActiveView("pipeline")}
           >
-            <Eye className="mr-1.5 h-3.5 w-3.5" />
-            {isFocusMode ? "Exit Focus Mode (Show All)" : "Lead Focus Mode (Hide Other Columns)"}
+            <BarChart3 className="mr-1.5 h-4 w-4" /> 6-Stage Sales Pipeline View
           </Button>
+          <Button
+            size="sm"
+            variant={activeView === "performance" ? "default" : "ghost"}
+            className="rounded-xl font-medium text-xs px-4 h-9"
+            onClick={() => setActiveView("performance")}
+          >
+            <TrendingUp className="mr-1.5 h-4 w-4 text-emerald-500" /> Telesales Performance & Funnel Dashboard
+          </Button>
+        </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs">
-                <Filter className="mr-1.5 h-3.5 w-3.5" /> Column Visibility ({visibleStages.length}/6)
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 p-3 space-y-2">
-              <p className="text-xs font-bold border-b pb-1.5">Toggle Visible Workflow Stages</p>
-              {WORKFLOW_STAGES.map((stg) => (
-                <div key={stg.id} className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    id={`stg-chk-${stg.id}`}
-                    checked={visibleStages.includes(stg.id)}
-                    onCheckedChange={(chk) => {
-                      if (chk) {
-                        setVisibleStages([...visibleStages, stg.id].sort());
-                      } else {
-                        if (visibleStages.length > 1) {
-                          setVisibleStages(visibleStages.filter((s) => s !== stg.id));
-                        } else {
-                          toast.error("At least one stage column must remain visible.");
-                        }
-                      }
-                    }}
-                  />
-                  <Label htmlFor={`stg-chk-${stg.id}`} className="cursor-pointer text-xs">
-                    {stg.title}
-                  </Label>
+        <Badge variant="outline" className="text-[10px] text-muted-foreground mr-2">
+          {activeView === "pipeline" ? "Showing Active Sales Journey Pipeline" : "Showing Daily/Weekly/Monthly Agent KPIs & Funnel"}
+        </Badge>
+      </div>
+
+      {/* View Content Switcher */}
+      {activeView === "performance" ? (
+        <div className="space-y-6">
+          {/* Performance Dashboard Top Controls & Timeframe Selector */}
+          <div className="rounded-2xl border bg-card p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-base font-bold flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-emerald-500" /> Telesales Agent & Team Performance Tracker
+              </h2>
+              <p className="text-xs text-muted-foreground">Monitor daily, weekly, and monthly call activities, meetings, proposals, and sales conversions against targets.</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">Timeframe:</span>
+              {(["daily", "weekly", "monthly"] as const).map((tf) => (
+                <Button
+                  key={tf}
+                  size="sm"
+                  variant={perfTimeframe === tf ? "default" : "outline"}
+                  className="h-8 rounded-xl text-xs capitalize"
+                  onClick={() => setPerfTimeframe(tf)}
+                >
+                  {tf} View
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* 5 Core Metric Cards */}
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+            {[
+              {
+                title: "1. Calls Made",
+                val: perfTimeframe === "daily" ? "225 Calls" : perfTimeframe === "weekly" ? "1,120 Calls" : "4,480 Calls",
+                sub: "Daily Target: 250",
+                icon: Phone,
+                color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
+              },
+              {
+                title: "2. Meetings Booked",
+                val: perfTimeframe === "daily" ? "35 Booked" : perfTimeframe === "weekly" ? "167 Booked" : "684 Booked",
+                sub: "Conversion: 35.6%",
+                icon: Calendar,
+                color: "text-purple-600 bg-purple-500/10 border-purple-500/20",
+              },
+              {
+                title: "3. Meetings Attended",
+                val: perfTimeframe === "daily" ? "27 Attended" : perfTimeframe === "weekly" ? "131 Attended" : "524 Attended",
+                sub: "Show Rate: 78.4%",
+                icon: CheckCircle2,
+                color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+              },
+              {
+                title: "4. Proposals Sent",
+                val: perfTimeframe === "daily" ? "17 Sent" : perfTimeframe === "weekly" ? "85 Sent" : "340 Sent",
+                sub: "Quote Rate: 64.9%",
+                icon: FileText,
+                color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20",
+              },
+              {
+                title: "5. Sales Closed (Won)",
+                val: perfTimeframe === "daily" ? "8 Won" : perfTimeframe === "weekly" ? "39 Won" : "158 Won",
+                sub: "Win Rate: 46.4%",
+                icon: Award,
+                color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+              },
+            ].map((c) => (
+              <div key={c.title} className="rounded-2xl border bg-card p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-muted-foreground">{c.title}</span>
+                  <div className={`p-2 rounded-xl border ${c.color}`}>
+                    <c.icon className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="mt-2 font-display text-xl font-bold">{c.val}</p>
+                <p className="mt-0.5 text-[10px] font-semibold text-primary">{c.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Conversion Rate Funnel Visualization */}
+          <SectionCard title="Stage Conversion Rate Funnel (Calls → Booked → Attended → Proposals → Sales Closed)">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 pt-2">
+              {[
+                { stage: "Calls Made", count: perfTimeframe === "daily" ? 225 : 1120, pct: "100%", stepPct: "Base Outreach", bg: "bg-blue-600" },
+                { stage: "Meetings Booked", count: perfTimeframe === "daily" ? 35 : 167, pct: "35.6%", stepPct: "15.6% of Calls", bg: "bg-purple-600" },
+                { stage: "Meetings Attended", count: perfTimeframe === "daily" ? 27 : 131, pct: "78.4%", stepPct: "78.4% of Booked", bg: "bg-amber-600" },
+                { stage: "Proposals Sent", count: perfTimeframe === "daily" ? 17 : 85, pct: "64.9%", stepPct: "64.9% of Attended", bg: "bg-indigo-600" },
+                { stage: "Sales Closed (Won)", count: perfTimeframe === "daily" ? 8 : 39, pct: "46.4%", stepPct: "46.4% of Proposals (14.1% Overall)", bg: "bg-emerald-600" },
+              ].map((fn) => (
+                <div key={fn.stage} className="rounded-xl border bg-card p-3 flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-foreground">{fn.stage}</span>
+                    <Badge variant="outline" className="text-[9px] font-mono">{fn.pct}</Badge>
+                  </div>
+                  <p className="font-display text-lg font-extrabold">{fn.count}</p>
+
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div className={`h-full ${fn.bg}`} style={{ width: fn.pct.includes("%") ? fn.pct : "100%" }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{fn.stepPct}</p>
                 </div>
               ))}
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiCard label="Pipeline Leads" value={filteredLeads.length} tone="primary" icon={UserPlus} delta="In active pipeline" />
-        <KpiCard label="Appointments Fixed" value={filteredLeads.filter((l) => l.stage >= 2).length} tone="info" icon={Calendar} delta="Meeting scheduled" />
-        <KpiCard label="Proposals Out" value={filteredLeads.filter((l) => l.stage >= 4).length} tone="warning" icon={FileText} delta="AED 165,000 value" />
-        <KpiCard label="Deals Closed & Executing" value={filteredLeads.filter((l) => l.dealClosed).length} tone="success" icon={Handshake} delta="Auto-synced to Services" />
-      </div>
-
-      {/* Visual Interactive Flowchart Strip */}
-      <div className="mt-6 rounded-2xl border bg-card p-5 shadow-sm">
-        <div className="flex items-center justify-between border-b pb-3 mb-4">
-          <div>
-            <h2 className="font-display text-base font-bold flex items-center gap-2">
-              <GitMerge className="h-5 w-5 text-primary" /> Interactive Sales Workflow Pipeline
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Sequential decision nodes governing telesales outreach, meeting execution, thank-you notes, and closing.
-            </p>
-          </div>
-          <Badge variant="outline" className="rounded-full bg-primary/5 text-primary border-primary/20">
-            Real-Time Automated Sync Active
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          {WORKFLOW_STAGES.map((stg) => (
-            <div
-              key={stg.id}
-              className={`rounded-xl border p-3 transition-all ${stg.color} ${
-                activeStageList.includes(stg.id) ? "opacity-100 ring-1 ring-primary/20" : "opacity-40 grayscale"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <stg.icon className="h-4 w-4 shrink-0" />
-                <span className="font-display text-xs font-bold truncate">{stg.title}</span>
-              </div>
-              <p className="mt-1 text-[11px] opacity-80">{stg.subtitle}</p>
             </div>
-          ))}
+          </SectionCard>
+
+          {/* Telesales Agent Leaderboard Table */}
+          <SectionCard title="Telesales Agent Performance Leaderboard & Target Achievement">
+            <div className="rounded-xl border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="text-xs">
+                    <TableHead>Agent Name</TableHead>
+                    <TableHead className="text-center">Calls Made</TableHead>
+                    <TableHead className="text-center">Meetings Booked</TableHead>
+                    <TableHead className="text-center">Meetings Attended</TableHead>
+                    <TableHead className="text-center">Proposals Sent</TableHead>
+                    <TableHead className="text-center">Sales Closed (Won)</TableHead>
+                    <TableHead className="text-right">Revenue (AED)</TableHead>
+                    <TableHead className="text-center">Call Target %</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody className="text-xs">
+                  {TELESALES_AGENT_METRICS.map((ag) => (
+                    <TableRow key={ag.agentName}>
+                      <TableCell className="font-bold">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage src={ag.avatar} />
+                            <AvatarFallback>{ag.agentName[0]}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-bold text-foreground">{ag.agentName}</p>
+                            <p className="text-[10px] text-muted-foreground">Telesales Executive</p>
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-center font-mono font-semibold">
+                        {ag.callsMade[perfTimeframe]}
+                      </TableCell>
+
+                      <TableCell className="text-center font-mono text-purple-600 font-semibold">
+                        {ag.meetingsBooked[perfTimeframe]}
+                      </TableCell>
+
+                      <TableCell className="text-center font-mono text-amber-600 font-semibold">
+                        {ag.meetingsAttended[perfTimeframe]}
+                      </TableCell>
+
+                      <TableCell className="text-center font-mono text-indigo-600 font-semibold">
+                        {ag.proposalsSent[perfTimeframe]}
+                      </TableCell>
+
+                      <TableCell className="text-center font-mono text-emerald-600 font-bold">
+                        {ag.salesClosed[perfTimeframe]}
+                      </TableCell>
+
+                      <TableCell className="text-right font-mono font-bold text-foreground">
+                        AED {ag.revenueGenerated.toLocaleString()}
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-16 bg-muted rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-full ${ag.targetAchievementRate >= 100 ? "bg-emerald-500" : "bg-primary"}`}
+                              style={{ width: `${Math.min(ag.targetAchievementRate, 100)}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-[11px] font-bold">{ag.targetAchievementRate}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </SectionCard>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Control & Filter Toolbar */}
+          <div className="mb-6 rounded-2xl border bg-card p-4 shadow-sm flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" /> Date Filter:
+              </span>
+              {["All", "Today", "This Week", "This Month"].map((range) => (
+                <Button
+                  key={range}
+                  size="sm"
+                  variant={dateRange === range ? "default" : "outline"}
+                  className="h-8 rounded-xl text-xs"
+                  onClick={() => setDateRange(range)}
+                >
+                  {range}
+                </Button>
+              ))}
+            </div>
+
+            {/* Visibility & Focus Mode Configurator */}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={isFocusMode ? "default" : "outline"}
+                className={`h-8 rounded-xl text-xs font-medium transition ${
+                  isFocusMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
+                }`}
+                onClick={() => setIsFocusMode(!isFocusMode)}
+              >
+                <Eye className="mr-1.5 h-3.5 w-3.5" />
+                {isFocusMode ? "Exit Focus Mode (Show All)" : "Lead Focus Mode (Hide Other Columns)"}
+              </Button>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs">
+                    <Filter className="mr-1.5 h-3.5 w-3.5" /> Column Visibility ({visibleStages.length}/6)
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-64 p-3 space-y-2">
+                  <p className="text-xs font-bold border-b pb-1.5">Toggle Visible Workflow Stages</p>
+                  {WORKFLOW_STAGES.map((stg) => (
+                    <div key={stg.id} className="flex items-center gap-2 text-xs">
+                      <Checkbox
+                        id={`stg-chk-${stg.id}`}
+                        checked={visibleStages.includes(stg.id)}
+                        onCheckedChange={(chk) => {
+                          if (chk) {
+                            setVisibleStages([...visibleStages, stg.id].sort());
+                          } else {
+                            if (visibleStages.length > 1) {
+                              setVisibleStages(visibleStages.filter((s) => s !== stg.id));
+                            } else {
+                              toast.error("At least one stage column must remain visible.");
+                            }
+                          }
+                        }}
+                      />
+                      <Label htmlFor={`stg-chk-${stg.id}`} className="cursor-pointer text-xs">
+                        {stg.title}
+                      </Label>
+                    </div>
+                  ))}
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <KpiCard label="Pipeline Leads" value={filteredLeads.length} tone="primary" icon={UserPlus} delta="In active pipeline" />
+            <KpiCard label="Appointments Fixed" value={filteredLeads.filter((l) => l.stage >= 2).length} tone="info" icon={Calendar} delta="Meeting scheduled" />
+            <KpiCard label="Proposals Out" value={filteredLeads.filter((l) => l.stage >= 4).length} tone="warning" icon={FileText} delta="AED 165,000 value" />
+            <KpiCard label="Deals Closed & Executing" value={filteredLeads.filter((l) => l.dealClosed).length} tone="success" icon={Handshake} delta="Auto-synced to Services" />
+          </div>
+
+          {/* Visual Interactive Flowchart Strip */}
+          <div className="mt-6 rounded-2xl border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between border-b pb-3 mb-4">
+              <div>
+                <h2 className="font-display text-base font-bold flex items-center gap-2">
+                  <GitMerge className="h-5 w-5 text-primary" /> Interactive Sales Workflow Pipeline
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Sequential decision nodes governing telesales outreach, meeting execution, thank-you notes, and closing.
+                </p>
+              </div>
+              <Badge variant="outline" className="rounded-full bg-primary/5 text-primary border-primary/20">
+                Real-Time Automated Sync Active
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              {WORKFLOW_STAGES.map((stg) => (
+                <div
+                  key={stg.id}
+                  className={`rounded-xl border p-3 transition-all ${stg.color} ${
+                    activeStageList.includes(stg.id) ? "opacity-100 ring-1 ring-primary/20" : "opacity-40 grayscale"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <stg.icon className="h-4 w-4 shrink-0" />
+                    <span className="font-display text-xs font-bold truncate">{stg.title}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] opacity-80">{stg.subtitle}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Dynamic Kanban Workflow Columns */}
       <div
@@ -861,6 +1123,70 @@ function TelesalesJourneyPage() {
                   </div>
                 </div>
               )}
+
+              {/* Call Remarks & Interaction Notes Logger (Client Requested Feature) */}
+              <div className="rounded-xl border bg-card p-3 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <span className="text-xs font-bold text-primary flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5" /> Call Remarks & Interaction Log
+                  </span>
+                  <Badge variant="outline" className="text-[9px] bg-primary/5 text-primary">
+                    Agent Logged
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <Label className="text-[10px]">Category</Label>
+                    <Select value={inspCategory} onValueChange={(v: any) => setInspCategory(v)}>
+                      <SelectTrigger className="h-7 text-xs rounded-lg mt-0.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Requirement Identified">Requirement Identified</SelectItem>
+                        <SelectItem value="Objection Raised">Objection Raised</SelectItem>
+                        <SelectItem value="Agreed Action">Agreed Action</SelectItem>
+                        <SelectItem value="Client Feedback">Client Feedback</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">Next Follow-Up</Label>
+                    <Input type="date" value={inspFollowUp} onChange={(e) => setInspFollowUp(e.target.value)} className="h-7 text-xs rounded-lg mt-0.5" />
+                  </div>
+                </div>
+
+                <div>
+                  <Textarea
+                    rows={2}
+                    placeholder="Log call remarks, customer requirements, objections, or agreed next actions..."
+                    value={inspText}
+                    onChange={(e) => setInspText(e.target.value)}
+                    className="text-xs rounded-xl resize-none"
+                  />
+                  <div className="mt-1.5 flex justify-end">
+                    <Button size="sm" className="h-7 text-[11px] rounded-lg" onClick={() => handleAddLeadNote(selectedLead.id)}>
+                      <Send className="mr-1 h-3 w-3" /> Save Call Note
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Lead Notes Timeline */}
+                {leadNotesMap[selectedLead.id] && leadNotesMap[selectedLead.id].length > 0 && (
+                  <div className="space-y-2 border-t pt-2 max-h-36 overflow-y-auto">
+                    <p className="text-[10px] font-semibold text-muted-foreground">Call Log History ({leadNotesMap[selectedLead.id].length}):</p>
+                    {leadNotesMap[selectedLead.id].map((n) => (
+                      <div key={n.id} className="rounded-lg border bg-muted/30 p-2 text-xs">
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground border-b pb-1 mb-1">
+                          <span className="font-semibold text-foreground">{n.agent} · {n.category}</span>
+                          <span>{n.timestamp}</span>
+                        </div>
+                        <p className="text-[11px]">{n.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <DialogFooter>

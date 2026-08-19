@@ -12,8 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Search, Download, Plus, Filter, RotateCcw, Info, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
+import { MessageSquare, Calendar as CalendarIcon } from "lucide-react";
 import { useRole } from "@/lib/role-context";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/customers/")({
   head: () => ({ meta: [{ title: "Customers — AY Astute Group CRM" }, { name: "description", content: "All customers." }] }),
@@ -40,6 +42,9 @@ function CustomersList() {
   const [newCity, setNewCity] = useState("Dubai");
   const [newTrn, setNewTrn] = useState("100234567800009");
   const [newService, setNewService] = useState("Corporate Tax Retainer & Filing");
+  const [newNotes, setNewNotes] = useState("");
+  const [newCategory, setNewCategory] = useState<"Requirement Identified" | "Objection Raised" | "Agreed Action" | "Client Feedback" | "General Note">("Requirement Identified");
+  const [newFollowUpDate, setNewFollowUpDate] = useState("2026-08-25");
 
   // Role Based Filter logic
   const isAgentView = role === "Caller";
@@ -380,9 +385,55 @@ function CustomersList() {
                 </div>
               </div>
 
+              {/* Call Notes & Discussion Remarks (Client Requested Feature) */}
+              <div className="border-t pt-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-primary flex items-center gap-1">
+                    <MessageSquare className="h-3.5 w-3.5" /> Initial Call Remarks & Interaction Notes
+                  </Label>
+                  <Badge variant="outline" className="text-[9px] bg-primary/5 text-primary border-primary/20">
+                    Agent Logged
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="c-cat" className="text-[11px]">Discussion Category</Label>
+                    <Select value={newCategory} onValueChange={(val: any) => setNewCategory(val)}>
+                      <SelectTrigger id="c-cat" className="h-8 text-xs rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Requirement Identified">Requirement Identified</SelectItem>
+                        <SelectItem value="Objection Raised">Objection Raised</SelectItem>
+                        <SelectItem value="Agreed Action">Agreed Action</SelectItem>
+                        <SelectItem value="Client Feedback">Client Feedback</SelectItem>
+                        <SelectItem value="General Note">General Note</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="c-fdate" className="text-[11px]">Next Follow-Up Date</Label>
+                    <Input id="c-fdate" type="date" value={newFollowUpDate} onChange={(e) => setNewFollowUpDate(e.target.value)} className="h-8 text-xs rounded-xl" />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="c-notes" className="text-[11px]">Call Discussion Remarks & Notes</Label>
+                  <Textarea
+                    id="c-notes"
+                    rows={3}
+                    placeholder="Record customer requirements, service scope discussed, objections, agreed actions..."
+                    value={newNotes}
+                    onChange={(e) => setNewNotes(e.target.value)}
+                    className="text-xs rounded-xl resize-none"
+                  />
+                </div>
+              </div>
+
               <DialogFooter className="pt-2">
                 <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-                <Button type="submit">Onboard Client</Button>
+                <Button type="submit">Onboard Client & Save Notes</Button>
               </DialogFooter>
             </form>
           </DialogContent>
