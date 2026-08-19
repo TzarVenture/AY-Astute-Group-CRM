@@ -8,9 +8,23 @@ export type LeadStatus =
   | "Not Interested"
   | "Not Contacted"
   | "Appointment Fixed"
-  | "New"
   | "Proposal Sent"
+  | "Won / Converted"
+  | "Lost"
+  | "New"
   | "Closed";
+
+export type CustomerStatus = "Active" | "Pending" | "Expired" | "Prospect" | "Won / Converted" | "Existing Client";
+
+export interface CustomerNote {
+  id: string;
+  agent: string;
+  timestamp: string;
+  category: "Requirement Identified" | "Objection Raised" | "Agreed Action" | "Client Feedback" | "General Note";
+  text: string;
+  nextFollowUpDate?: string;
+  agreedActions?: string;
+}
 
 export interface Customer {
   id: string;
@@ -20,7 +34,7 @@ export interface Customer {
   email: string;
   city: string;
   country: string;
-  status: "Active" | "Pending" | "Expired" | "Prospect";
+  status: CustomerStatus;
   service: string;
   expiry: string;
   caller: string;
@@ -31,6 +45,8 @@ export interface Customer {
   company: string;
   leadSource: string;
   createdDate: string;
+  nextFollowUpDate?: string;
+  callNotes?: CustomerNote[];
 }
 
 const firstNames = ["Ahmed", "Fatima", "Mohammed", "Aisha", "Omar", "Layla", "Yusuf", "Zainab", "Hassan", "Mariam", "Khalid", "Noor", "Rashid", "Sara", "Ibrahim", "Huda", "Salem", "Amina", "Faisal", "Reem"];
@@ -136,8 +152,11 @@ export const REQUIRED_LEAD_STATUSES: LeadStatus[] = [
   "Call Back",
   "Appointment Fixed",
   "Future Follow-up",
+  "Proposal Sent",
+  "Won / Converted",
   "Existing Client",
   "Not Interested",
+  "Lost",
   "DND",
 ];
 
@@ -148,11 +167,88 @@ const leadStatuses: LeadStatus[] = [
   "Call Back",
   "Appointment Fixed",
   "Future Follow-up",
+  "Proposal Sent",
+  "Won / Converted",
   "Existing Client",
   "Not Interested",
+  "Lost",
   "DND",
-  "New",
-  "Proposal Sent",
+];
+
+export interface AgentPerformance {
+  agentName: string;
+  avatar: string;
+  callsMade: { daily: number; weekly: number; monthly: number };
+  meetingsBooked: { daily: number; weekly: number; monthly: number };
+  meetingsAttended: { daily: number; weekly: number; monthly: number };
+  proposalsSent: { daily: number; weekly: number; monthly: number };
+  salesClosed: { daily: number; weekly: number; monthly: number };
+  revenueGenerated: number; // AED
+  callTarget: number;
+  targetAchievementRate: number; // %
+}
+
+export const TELESALES_AGENT_METRICS: AgentPerformance[] = [
+  {
+    agentName: "Priya Menon",
+    avatar: "https://i.pravatar.cc/80?img=15",
+    callsMade: { daily: 48, weekly: 235, monthly: 940 },
+    meetingsBooked: { daily: 8, weekly: 38, monthly: 152 },
+    meetingsAttended: { daily: 6, weekly: 29, monthly: 116 },
+    proposalsSent: { daily: 4, weekly: 19, monthly: 76 },
+    salesClosed: { daily: 2, weekly: 9, monthly: 38 },
+    revenueGenerated: 245000,
+    callTarget: 50,
+    targetAchievementRate: 96,
+  },
+  {
+    agentName: "Rahul Sharma",
+    avatar: "https://i.pravatar.cc/80?img=12",
+    callsMade: { daily: 42, weekly: 210, monthly: 840 },
+    meetingsBooked: { daily: 6, weekly: 31, monthly: 124 },
+    meetingsAttended: { daily: 5, weekly: 24, monthly: 96 },
+    proposalsSent: { daily: 3, weekly: 15, monthly: 60 },
+    salesClosed: { daily: 1, weekly: 7, monthly: 28 },
+    revenueGenerated: 185000,
+    callTarget: 50,
+    targetAchievementRate: 84,
+  },
+  {
+    agentName: "Anita Desai",
+    avatar: "https://i.pravatar.cc/80?img=25",
+    callsMade: { daily: 52, weekly: 260, monthly: 1040 },
+    meetingsBooked: { daily: 9, weekly: 42, monthly: 168 },
+    meetingsAttended: { daily: 7, weekly: 32, monthly: 128 },
+    proposalsSent: { daily: 5, weekly: 22, monthly: 88 },
+    salesClosed: { daily: 2, weekly: 10, monthly: 42 },
+    revenueGenerated: 295000,
+    callTarget: 50,
+    targetAchievementRate: 104,
+  },
+  {
+    agentName: "Kareem Ali",
+    avatar: "https://i.pravatar.cc/80?img=33",
+    callsMade: { daily: 38, weekly: 190, monthly: 760 },
+    meetingsBooked: { daily: 5, weekly: 25, monthly: 100 },
+    meetingsAttended: { daily: 4, weekly: 19, monthly: 76 },
+    proposalsSent: { daily: 2, weekly: 12, monthly: 48 },
+    salesClosed: { daily: 1, weekly: 5, monthly: 20 },
+    revenueGenerated: 140000,
+    callTarget: 50,
+    targetAchievementRate: 76,
+  },
+  {
+    agentName: "Sonia Verma",
+    avatar: "https://i.pravatar.cc/80?img=47",
+    callsMade: { daily: 45, weekly: 225, monthly: 900 },
+    meetingsBooked: { daily: 7, weekly: 35, monthly: 140 },
+    meetingsAttended: { daily: 5, weekly: 27, monthly: 108 },
+    proposalsSent: { daily: 3, weekly: 17, monthly: 68 },
+    salesClosed: { daily: 2, weekly: 8, monthly: 32 },
+    revenueGenerated: 210000,
+    callTarget: 50,
+    targetAchievementRate: 90,
+  },
 ];
 
 const leadCompanies = [
