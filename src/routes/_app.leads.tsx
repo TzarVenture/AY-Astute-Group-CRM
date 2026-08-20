@@ -22,6 +22,9 @@ export const Route = createFileRoute("/_app/leads")({
   component: Leads,
 });
 
+import { Textarea } from "@/components/ui/textarea";
+import { MessageSquare } from "lucide-react";
+
 const SOURCE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "Google Ads": Chrome, Website: Globe, WhatsApp: MessageCircle, Manual: UserPlus, Referral: Users, "Existing Client": UserCheck,
 };
@@ -36,7 +39,19 @@ function Leads() {
   const [selectedLeadForDetails, setSelectedLeadForDetails] = useState<Lead | null>(null);
   const [newLeadDialogOpen, setNewLeadDialogOpen] = useState(false);
   const [lifecycleExplainerOpen, setLifecycleExplainerOpen] = useState(false);
-  const [newLeadForm, setNewLeadForm] = useState({ name: "", company: "", email: "", phone: "", source: "Website", assigned: "Priya Menon", dealValue: "25000", status: "Not Contacted" as LeadStatus });
+  const [newLeadForm, setNewLeadForm] = useState({
+    name: "",
+    company: "",
+    email: "",
+    phone: "",
+    source: "Website",
+    assigned: "Priya Menon",
+    dealValue: "25000",
+    status: "Not Contacted" as LeadStatus,
+    notes: "",
+    category: "Requirement Identified" as "Requirement Identified" | "Objection Raised" | "Agreed Action" | "Client Feedback" | "General Note",
+    nextFollowUpDate: "2026-08-25",
+  });
 
   const isAgentView = role === "Caller";
 
@@ -84,15 +99,29 @@ function Leads() {
           id: `log-${Date.now()}`,
           previousStatus: "Not Contacted",
           newStatus: newLeadForm.status,
-          updatedBy: "Current User",
+          updatedBy: newLeadForm.assigned || "Priya Menon",
           timestamp: "Just now",
-          notes: "Lead manually registered in CRM",
+          notes: newLeadForm.notes
+            ? `[${newLeadForm.category}] ${newLeadForm.notes} (Next Follow-Up: ${newLeadForm.nextFollowUpDate})`
+            : "Lead manually registered in CRM",
         },
       ],
     };
     setLeadsList([created, ...leadsList]);
     setNewLeadDialogOpen(false);
-    setNewLeadForm({ name: "", company: "", email: "", phone: "", source: "Website", assigned: "Priya Menon", dealValue: "25000", status: "Not Contacted" });
+    setNewLeadForm({
+      name: "",
+      company: "",
+      email: "",
+      phone: "",
+      source: "Website",
+      assigned: "Priya Menon",
+      dealValue: "25000",
+      status: "Not Contacted",
+      notes: "",
+      category: "Requirement Identified",
+      nextFollowUpDate: "2026-08-25",
+    });
   };
 
   // Status Counts
@@ -528,12 +557,66 @@ function Leads() {
                 />
               </div>
             </div>
+
+            {/* Initial Call Remarks & Discussion Notes (Client Requested Feature) */}
+            <div className="border-t pt-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-primary flex items-center gap-1">
+                  <MessageSquare className="h-3.5 w-3.5" /> Initial Call Remarks & Interaction Notes
+                </Label>
+                <Badge variant="outline" className="text-[9px] bg-primary/5 text-primary border-primary/20">
+                  Agent Logged
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[11px]">Discussion Category</Label>
+                  <Select
+                    value={newLeadForm.category}
+                    onValueChange={(val: any) => setNewLeadForm({ ...newLeadForm, category: val })}
+                  >
+                    <SelectTrigger className="h-8 text-xs rounded-xl mt-0.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Requirement Identified">Requirement Identified</SelectItem>
+                      <SelectItem value="Objection Raised">Objection Raised</SelectItem>
+                      <SelectItem value="Agreed Action">Agreed Action</SelectItem>
+                      <SelectItem value="Client Feedback">Client Feedback</SelectItem>
+                      <SelectItem value="General Note">General Note</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px]">Next Follow-Up Date</Label>
+                  <Input
+                    type="date"
+                    value={newLeadForm.nextFollowUpDate}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, nextFollowUpDate: e.target.value })}
+                    className="h-8 text-xs rounded-xl mt-0.5"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-[11px]">Call Discussion Remarks & Notes</Label>
+                <Textarea
+                  rows={3}
+                  placeholder="Record initial lead requirements, services discussed, objections raised, agreed next actions..."
+                  value={newLeadForm.notes}
+                  onChange={(e) => setNewLeadForm({ ...newLeadForm, notes: e.target.value })}
+                  className="text-xs rounded-xl resize-none mt-0.5"
+                />
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2 pt-3 border-t">
               <Button type="button" variant="outline" onClick={() => setNewLeadDialogOpen(false)} className="rounded-xl text-xs">
                 Cancel
               </Button>
               <Button type="submit" className="rounded-xl text-xs font-semibold">
-                Save Lead
+                Save Lead & Log Notes
               </Button>
             </div>
           </form>
